@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling==1.21.1"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dropcell"
+version = "0.1.0"
+description = "Cathodic protection monitoring and compliance for buried steel pipelines"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "glinskevxer" }]
+dependencies = ["click==8.1.7"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.0.0",
+  "pytest-cov==4.1.0",
+  "coverage==7.4.1",
+  "ruff==0.2.1",
+  "mypy==1.8.0",
+]
+
+[project.scripts]
+dropcell = "dropcell.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dropcell"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RET", "N"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
