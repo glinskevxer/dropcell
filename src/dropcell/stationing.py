@@ -117,3 +117,108 @@ class Station:
 
     def __str__(self) -> str:
         return self.format()
+
+
+@dataclass(frozen=True, order=True)
+class StationRange:
+    """A closed run of line between two stations.
+
+    Ranges are used everywhere a finding has extent rather than a point: a
+    stretch of pipe reading under criterion, the throw of a foreign line's
+    interference, the piece of coating a dig will replace.
+    """
+
+    start: Station
+    end: Station
+
+    def __post_init__(self) -> None:
+        if self.end.metres < self.start.metres:
+            raise StationError(
+                "range runs backwards",
+                start=self.start.metres,
+                end=self.end.metres,
+            )
+
+    @classmethod
+    def parse(cls, text: str, convention: Convention = Convention.FOOT) -> StationRange:
+        """Read ``12+00.00 to 14+50.00`` or the same thing written with a dash."""
+        cleaned = text.strip()
+        for separator in (" to ", "..", "—", " - "):
+            if separator in cleaned:
+                left, _, right = cleaned.partition(separator)
+                return cls(
+                    Station.parse(left, convention),
+                    Station.parse(right, convention),
+                )
+        raise StationError("cannot read a station range from this", text=text)
+
+    @property
+    def length_m(self) -> float:
+        """How much line the range covers."""
+        return self.end.metres - self.start.metres
+
+    def contains(self, station: Station) -> bool:
+        """Whether a station falls inside the range, endpoints included."""
+        return self.start.metres <= station.metres <= self.end.metres
+
+    def overlaps(self, other: StationRange) -> bool:
+        """Whether two ranges share any line at all, touching endpoints included."""
+        return self.start.metres <= other.end.metres and other.start.metres <= self.end.metres
+
+    def intersection(self, other: StationRange) -> StationRange | None:
+        """The piece of line both ranges cover, or nothing if they are disjoint."""
+        if not self.overlaps(other):
+            return None
+        return StationRange(
+            Station(max(self.start.metres, other.start.metres)),
+            Station(min(self.end.metres, other.end.metres)),
+        )
+
+    def subtract(self, other: StationRange) -> list[StationRange]:
+        """What is left of this range once another one is cut out of it."""
+        overlap = self.intersection(other)
+        if overlap is None:
+            return [self]
+        pieces: list[StationRange] = []
+        if self.start.metres < overlap.start.metres:
+            pieces.append(StationRange(self.start, overlap.start))
+        if overlap.end.metres < self.end.metres:
+            pieces.append(StationRange(overlap.end, self.end))
+        return pieces
+
+    def format(self, convention: Convention = Convention.FOOT) -> str:
+        """Write the range the way a dig sheet prints it."""
+        return f"{self.start.format(convention)} to {self.end.format(convention)}"
+
+    def __str__(self) -> str:
+        return self.format()
+
+
+def merge_ranges(
+    ranges: list[StationRange], *, gap_tolerance_m: float = 0.0
+) -> list[StationRange]:
+    """Collapse overlapping ranges, joining across gaps no wider than the tolerance.
+
+    A close interval survey drops readings where the crew could not get a probe
+    in, so a single under criterion stretch often arrives as several ranges with
+    a few metres of nothing between them. The tolerance decides whether those
+    are one finding or several, and it is a judgement the caller owns rather
+    than something this function should guess.
+    """
+    if gap_tolerance_m < 0:
+        raise StationError("gap tolerance cannot be negative", gap_tolerance_m=gap_tolerance_m)
+    ordered = sorted(ranges, key=lambda item: (item.start.metres, item.end.metres))
+    merged: list[StationRange] = []
+    for candidate in ordered:
+        if merged and candidate.start.metres - merged[-1].end.metres <= gap_tolerance_m:
+            last = merged[-1]
+            if candidate.end.metres > last.end.metres:
+                merged[-1] = StationRange(last.start, candidate.end)
+            continue
+        merged.append(candidate)
+    return merged
+
+
+def total_length_m(ranges: list[StationRange]) -> float:
+    """Line covered by a set of ranges, counting shared line only once."""
+    return sum(item.length_m for item in merge_ranges(ranges))
