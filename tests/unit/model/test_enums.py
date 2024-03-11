@@ -5,10 +5,10 @@ import pytest
 from dropcell.model.enums import (
     ClassLocation,
     CoatingType,
+    LeadKind,
     ProtectionMethod,
     SoilCorrosivity,
     SurveyKind,
-    TestPointKind,
 )
 
 
@@ -39,15 +39,15 @@ def test_only_impressed_current_can_be_interrupted() -> None:
 
 
 def test_a_foreign_or_casing_lead_is_not_our_pipe() -> None:
-    assert not TestPointKind.FOREIGN.carries_structure_potential
-    assert not TestPointKind.CASING.carries_structure_potential
-    assert not TestPointKind.ANODE.carries_structure_potential
+    assert not LeadKind.FOREIGN.carries_structure_potential
+    assert not LeadKind.CASING.carries_structure_potential
+    assert not LeadKind.ANODE.carries_structure_potential
 
 
 def test_pipe_coupon_and_isolation_leads_read_our_own_steel() -> None:
-    assert TestPointKind.PIPE.carries_structure_potential
-    assert TestPointKind.COUPON.carries_structure_potential
-    assert TestPointKind.ISOLATION.carries_structure_potential
+    assert LeadKind.PIPE.carries_structure_potential
+    assert LeadKind.COUPON.carries_structure_potential
+    assert LeadKind.ISOLATION.carries_structure_potential
 
 
 @pytest.mark.parametrize(

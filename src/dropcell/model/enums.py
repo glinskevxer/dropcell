@@ -74,8 +74,15 @@ class ProtectionMethod(StrEnum):
         return self is ProtectionMethod.IMPRESSED_CURRENT
 
 
-class TestPointKind(StrEnum):
-    """What a lead at a test point is connected to."""
+class LeadKind(StrEnum):
+    """What a lead at a test point is connected to.
+
+    A post carries several wires. Two go to the pipe so the reading is taken
+    without any current flowing in the measuring lead, one goes to the casing
+    if there is one, one goes to a foreign owner's line at a crossing, and a
+    coupon lead goes to a small buried steel disc that stands in for a coating
+    holiday. Which wire a number came off decides what may be said about it.
+    """
 
     PIPE = "pipe"
     CASING = "casing"
@@ -88,7 +95,7 @@ class TestPointKind(StrEnum):
     @property
     def carries_structure_potential(self) -> bool:
         """Whether a reading off this lead is a potential on our own pipe."""
-        return self in {TestPointKind.PIPE, TestPointKind.COUPON, TestPointKind.ISOLATION}
+        return self in {LeadKind.PIPE, LeadKind.COUPON, LeadKind.ISOLATION}
 
 
 class SurveyKind(StrEnum):
