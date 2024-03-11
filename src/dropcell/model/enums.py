@@ -138,3 +138,23 @@ class SoilCorrosivity(StrEnum):
     MODERATE = "moderate"
     MILD = "mild"
     BENIGN = "benign"
+
+
+class Commodity(StrEnum):
+    """What the line carries, which decides how hard a leak is taken."""
+
+    NATURAL_GAS = "natural_gas"
+    CRUDE_OIL = "crude_oil"
+    REFINED_PRODUCTS = "refined_products"
+    NATURAL_GAS_LIQUIDS = "ngl"
+    CARBON_DIOXIDE = "co2"
+    WATER = "water"
+
+    @property
+    def is_hazardous_liquid(self) -> bool:
+        """Whether a release is a liquid spill rather than a gas escape."""
+        return self in {
+            Commodity.CRUDE_OIL,
+            Commodity.REFINED_PRODUCTS,
+            Commodity.NATURAL_GAS_LIQUIDS,
+        }
