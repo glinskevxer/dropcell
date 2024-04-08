@@ -43,3 +43,7 @@ warn_unreachable = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+# The domain has records called TestPoint and TestPost. Collection by class
+# name picks those up out of the modules that import them, so the pattern is
+# narrowed to something no record will ever be called.
+python_classes = ["Case*"]
