@@ -158,3 +158,73 @@ class Commodity(StrEnum):
             Commodity.REFINED_PRODUCTS,
             Commodity.NATURAL_GAS_LIQUIDS,
         }
+
+
+class AnodeMaterial(StrEnum):
+    """What the anodes are made of, which decides how fast they disappear."""
+
+    HIGH_SILICON_IRON = "high_silicon_iron"
+    GRAPHITE = "graphite"
+    MAGNETITE = "magnetite"
+    MIXED_METAL_OXIDE = "mmo"
+    MAGNESIUM = "magnesium"
+    ZINC = "zinc"
+    ALUMINIUM = "aluminium"
+
+    @property
+    def consumption_kg_per_amp_year(self) -> float:
+        """Mass the anode loses for every ampere it passes for a year."""
+        return _CONSUMPTION_RATE[self]
+
+    @property
+    def driving_potential_mv(self) -> float | None:
+        """Open circuit potential against copper sulfate, for galvanic materials.
+
+        An impressed current anode has no useful driving potential of its own,
+        because the rectifier supplies the push. A galvanic anode has nothing
+        else, so the gap between its open circuit potential and the pipe is the
+        entire budget the system has to work with.
+        """
+        return _DRIVING_POTENTIAL.get(self)
+
+    @property
+    def is_galvanic(self) -> bool:
+        """Whether the material can drive current without a rectifier."""
+        return self in _DRIVING_POTENTIAL
+
+
+_CONSUMPTION_RATE: dict[AnodeMaterial, float] = {
+    AnodeMaterial.HIGH_SILICON_IRON: 0.45,
+    AnodeMaterial.GRAPHITE: 0.45,
+    AnodeMaterial.MAGNETITE: 0.02,
+    AnodeMaterial.MIXED_METAL_OXIDE: 0.000006,
+    AnodeMaterial.MAGNESIUM: 7.9,
+    AnodeMaterial.ZINC: 11.9,
+    AnodeMaterial.ALUMINIUM: 3.5,
+}
+
+_DRIVING_POTENTIAL: dict[AnodeMaterial, float] = {
+    AnodeMaterial.MAGNESIUM: -1550.0,
+    AnodeMaterial.ZINC: -1100.0,
+    AnodeMaterial.ALUMINIUM: -1100.0,
+}
+
+
+class GroundbedKind(StrEnum):
+    """How the anodes are put in the ground."""
+
+    DEEP_WELL = "deep_well"
+    SHALLOW_HORIZONTAL = "shallow_horizontal"
+    DISTRIBUTED = "distributed"
+    GALVANIC_STRING = "galvanic_string"
+
+    @property
+    def is_remote(self) -> bool:
+        """Whether the bed is far enough from the pipe to spread current widely.
+
+        A remote bed protects miles of line from one point and puts a big
+        potential gradient in the earth around itself. A distributed bed sits
+        along the pipe, protects only what it is beside, and barely disturbs
+        anything else buried nearby.
+        """
+        return self in {GroundbedKind.DEEP_WELL, GroundbedKind.SHALLOW_HORIZONTAL}
