@@ -84,6 +84,44 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX segment_by_line ON segment (line_code, start_m)",
         ),
     ),
+    Migration(
+        version=2,
+        name="test points and readings",
+        statements=(
+            """
+            CREATE TABLE test_point (
+                code                      TEXT PRIMARY KEY,
+                line_code                 TEXT NOT NULL
+                                          REFERENCES line(code) ON DELETE CASCADE,
+                station_m                 REAL NOT NULL,
+                leads                     TEXT NOT NULL,
+                installed_on              TEXT NOT NULL,
+                description               TEXT NOT NULL DEFAULT '',
+                permanent_reference_cell  INTEGER NOT NULL DEFAULT 0
+            )
+            """,
+            """
+            CREATE TABLE reading (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_point_code  TEXT NOT NULL
+                                 REFERENCES test_point(code) ON DELETE CASCADE,
+                lead             TEXT NOT NULL,
+                taken_on         TEXT NOT NULL,
+                on_mv            REAL NOT NULL,
+                off_mv           REAL,
+                native_mv        REAL,
+                electrode        TEXT NOT NULL DEFAULT 'cse',
+                cell_serial      TEXT NOT NULL DEFAULT '',
+                technician       TEXT NOT NULL DEFAULT '',
+                comment          TEXT NOT NULL DEFAULT '',
+                UNIQUE (test_point_code, lead, taken_on)
+            )
+            """,
+            "CREATE INDEX test_point_by_line ON test_point (line_code, station_m)",
+            "CREATE INDEX reading_by_date ON reading (taken_on)",
+            "CREATE INDEX reading_by_point ON reading (test_point_code, taken_on)",
+        ),
+    ),
 )
 
 
