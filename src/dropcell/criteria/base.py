@@ -59,8 +59,11 @@ class Evidence:
     ac_voltage_v: float | None = None
     ac_current_density_a_per_m2: float | None = None
     dc_current_density_a_per_m2: float | None = None
+    depolarised_after_hours: float | None = None
     soil_resistivity_ohm_m: float | None = None
     interrupted: bool = False
+    dissimilar_metals: bool = False
+    stray_current_suspected: bool = False
     label: str = ""
 
     @property
