@@ -12,12 +12,12 @@ from __future__ import annotations
 import datetime as dt
 import sqlite3
 
-from dropcell.errors import NotFoundError, ValidationError
+from dropcell.errors import ValidationError
 from dropcell.model.enums import LeadKind
 from dropcell.model.ids import normalise_code
 from dropcell.model.testpoint import TestPoint
 from dropcell.stationing import Station, StationRange
-from dropcell.store.database import Database
+from dropcell.store.base import Repository
 
 TEST_POINT_COLUMNS = (
     "code, line_code, station_m, leads, installed_on, description, permanent_reference_cell"
@@ -52,11 +52,17 @@ def row_to_test_point(row: sqlite3.Row) -> TestPoint:
     )
 
 
-class TestPointRepository:
+class TestPointRepository(Repository[TestPoint]):
     """Every post in the register."""
 
-    def __init__(self, database: Database) -> None:
-        self.database = database
+    table = "test_point"
+    columns = TEST_POINT_COLUMNS
+    noun = "test point"
+    order_by = "line_code, station_m"
+
+    def to_record(self, row: sqlite3.Row) -> TestPoint:
+        """Rebuild a test post from a register row."""
+        return row_to_test_point(row)
 
     def add(self, post: TestPoint) -> TestPoint:
         """Insert a post."""
@@ -72,21 +78,6 @@ class TestPointRepository:
                 int(post.permanent_reference_cell),
             ),
         )
-        return post
-
-    def find(self, code: str) -> TestPoint | None:
-        """The post under that code, or nothing."""
-        row = self.database.query_one(
-            f"SELECT {TEST_POINT_COLUMNS} FROM test_point WHERE code = ?",
-            (normalise_code(code, kind="test point code"),),
-        )
-        return None if row is None else row_to_test_point(row)
-
-    def get(self, code: str) -> TestPoint:
-        """The post under that code, or a refusal naming it."""
-        post = self.find(code)
-        if post is None:
-            raise NotFoundError("no test point with that code", code=code)
         return post
 
     def for_line(self, line_code: str) -> list[TestPoint]:
@@ -114,14 +105,3 @@ class TestPointRepository:
     def with_lead(self, line_code: str, lead: LeadKind) -> list[TestPoint]:
         """Every post on one line that carries a particular lead."""
         return [post for post in self.for_line(line_code) if post.has(lead)]
-
-    def count(self) -> int:
-        """How many posts the register holds."""
-        return int(self.database.scalar("SELECT count(*) FROM test_point") or 0)
-
-    def delete(self, code: str) -> None:
-        """Remove a post and its readings."""
-        normalised = normalise_code(code, kind="test point code")
-        cursor = self.database.execute("DELETE FROM test_point WHERE code = ?", (normalised,))
-        if cursor.rowcount == 0:
-            raise NotFoundError("no test point with that code", code=normalised)

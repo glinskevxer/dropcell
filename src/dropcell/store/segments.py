@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import sqlite3
 
-from dropcell.errors import ConflictError, NotFoundError
+from dropcell.errors import ConflictError
 from dropcell.model.enums import ClassLocation, CoatingType, ProtectionMethod
 from dropcell.model.ids import normalise_code
 from dropcell.model.segment import Segment
 from dropcell.stationing import Station, StationRange
-from dropcell.store.database import Database
+from dropcell.store.base import Repository
 
 SEGMENT_COLUMNS = (
     "code, line_code, start_m, end_m, coating, protection, class_location, "
@@ -63,11 +63,17 @@ def _values(segment: Segment) -> tuple[object, ...]:
     )
 
 
-class SegmentRepository:
+class SegmentRepository(Repository[Segment]):
     """Every segment in the register."""
 
-    def __init__(self, database: Database) -> None:
-        self.database = database
+    table = "segment"
+    columns = SEGMENT_COLUMNS
+    noun = "segment"
+    order_by = "line_code, start_m"
+
+    def to_record(self, row: sqlite3.Row) -> Segment:
+        """Rebuild a segment from a register row."""
+        return row_to_segment(row)
 
     def add(self, segment: Segment, *, allow_overlap: bool = False) -> Segment:
         """Insert a segment, refusing one that lies on top of another by default.
@@ -89,21 +95,6 @@ class SegmentRepository:
             f"INSERT INTO segment ({SEGMENT_COLUMNS}) VALUES ({_PLACEHOLDERS})",
             _values(segment),
         )
-        return segment
-
-    def find(self, code: str) -> Segment | None:
-        """The segment under that code, or nothing."""
-        row = self.database.query_one(
-            f"SELECT {SEGMENT_COLUMNS} FROM segment WHERE code = ?",
-            (normalise_code(code, kind="segment code"),),
-        )
-        return None if row is None else row_to_segment(row)
-
-    def get(self, code: str) -> Segment:
-        """The segment under that code, or a refusal naming it."""
-        segment = self.find(code)
-        if segment is None:
-            raise NotFoundError("no segment with that code", code=code)
         return segment
 
     def for_line(self, line_code: str) -> list[Segment]:
@@ -137,21 +128,3 @@ class SegmentRepository:
             ),
         )
         return [row_to_segment(row) for row in rows]
-
-    def all(self) -> list[Segment]:
-        """Every segment, line by line and then in stationing order."""
-        rows = self.database.query(
-            f"SELECT {SEGMENT_COLUMNS} FROM segment ORDER BY line_code, start_m"
-        )
-        return [row_to_segment(row) for row in rows]
-
-    def count(self) -> int:
-        """How many segments the register holds."""
-        return int(self.database.scalar("SELECT count(*) FROM segment") or 0)
-
-    def delete(self, code: str) -> None:
-        """Remove a segment."""
-        normalised = normalise_code(code, kind="segment code")
-        cursor = self.database.execute("DELETE FROM segment WHERE code = ?", (normalised,))
-        if cursor.rowcount == 0:
-            raise NotFoundError("no segment with that code", code=normalised)

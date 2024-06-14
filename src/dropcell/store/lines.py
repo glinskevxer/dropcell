@@ -10,12 +10,10 @@ from __future__ import annotations
 
 import sqlite3
 
-from dropcell.errors import NotFoundError
 from dropcell.model.enums import Commodity
-from dropcell.model.ids import normalise_code
 from dropcell.model.line import Line
 from dropcell.stationing import Convention
-from dropcell.store.database import Database
+from dropcell.store.base import Repository
 
 LINE_COLUMNS = (
     "code, name, operator, commodity, length_m, nominal_diameter_mm, "
@@ -38,11 +36,16 @@ def row_to_line(row: sqlite3.Row) -> Line:
     )
 
 
-class LineRepository:
+class LineRepository(Repository[Line]):
     """Every line in the register."""
 
-    def __init__(self, database: Database) -> None:
-        self.database = database
+    table = "line"
+    columns = LINE_COLUMNS
+    noun = "line"
+
+    def to_record(self, row: sqlite3.Row) -> Line:
+        """Rebuild a line from a register row."""
+        return row_to_line(row)
 
     def add(self, line: Line) -> Line:
         """Insert a line, refusing a code that is already taken."""
@@ -85,34 +88,3 @@ class LineRepository:
             ),
         )
         return line
-
-    def find(self, code: str) -> Line | None:
-        """The line under that code, or nothing."""
-        row = self.database.query_one(
-            f"SELECT {LINE_COLUMNS} FROM line WHERE code = ?",
-            (normalise_code(code, kind="line code"),),
-        )
-        return None if row is None else row_to_line(row)
-
-    def get(self, code: str) -> Line:
-        """The line under that code, or a refusal naming it."""
-        line = self.find(code)
-        if line is None:
-            raise NotFoundError("no line with that code", code=code)
-        return line
-
-    def all(self) -> list[Line]:
-        """Every line, in code order."""
-        rows = self.database.query(f"SELECT {LINE_COLUMNS} FROM line ORDER BY code")
-        return [row_to_line(row) for row in rows]
-
-    def count(self) -> int:
-        """How many lines the register holds."""
-        return int(self.database.scalar("SELECT count(*) FROM line") or 0)
-
-    def delete(self, code: str) -> None:
-        """Remove a line and everything hanging off it."""
-        normalised = normalise_code(code, kind="line code")
-        cursor = self.database.execute("DELETE FROM line WHERE code = ?", (normalised,))
-        if cursor.rowcount == 0:
-            raise NotFoundError("no line with that code", code=normalised)
