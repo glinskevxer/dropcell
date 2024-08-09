@@ -122,6 +122,45 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX reading_by_point ON reading (test_point_code, taken_on)",
         ),
     ),
+    Migration(
+        version=3,
+        name="findings",
+        statements=(
+            """
+            CREATE TABLE finding (
+                code          TEXT PRIMARY KEY,
+                line_code     TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                kind          TEXT NOT NULL,
+                raised_on     TEXT NOT NULL,
+                start_m       REAL NOT NULL,
+                end_m         REAL NOT NULL,
+                summary       TEXT NOT NULL,
+                state         TEXT NOT NULL DEFAULT 'open',
+                due_by        TEXT,
+                closed_on     TEXT,
+                closed_by     TEXT NOT NULL DEFAULT '',
+                closed_reason TEXT NOT NULL DEFAULT '',
+                source        TEXT NOT NULL DEFAULT '',
+                CHECK (end_m >= start_m)
+            )
+            """,
+            """
+            CREATE TABLE finding_event (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                finding_code TEXT NOT NULL REFERENCES finding(code) ON DELETE CASCADE,
+                happened_on  TEXT NOT NULL,
+                from_state   TEXT NOT NULL,
+                to_state     TEXT NOT NULL,
+                actor        TEXT NOT NULL DEFAULT '',
+                note         TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            "CREATE INDEX finding_by_line ON finding (line_code, start_m)",
+            "CREATE INDEX finding_by_state ON finding (state, due_by)",
+            "CREATE INDEX finding_event_by_finding ON finding_event"
+            " (finding_code, happened_on)",
+        ),
+    ),
 )
 
 
