@@ -161,6 +161,35 @@ MIGRATIONS: tuple[Migration, ...] = (
             " (finding_code, happened_on)",
         ),
     ),
+    Migration(
+        version=4,
+        name="import ledger",
+        statements=(
+            """
+            CREATE TABLE import_run (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                content_hash TEXT NOT NULL UNIQUE,
+                profile      TEXT NOT NULL,
+                kind         TEXT NOT NULL,
+                source       TEXT NOT NULL DEFAULT '',
+                imported_at  TEXT NOT NULL,
+                accepted     INTEGER NOT NULL,
+                rejected     INTEGER NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE import_quarantine (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id     INTEGER NOT NULL REFERENCES import_run(id) ON DELETE CASCADE,
+                row_number INTEGER NOT NULL,
+                raw        TEXT NOT NULL,
+                reasons    TEXT NOT NULL
+            )
+            """,
+            "CREATE INDEX import_run_by_date ON import_run (imported_at)",
+            "CREATE INDEX quarantine_by_run ON import_quarantine (run_id, row_number)",
+        ),
+    ),
 )
 
 
