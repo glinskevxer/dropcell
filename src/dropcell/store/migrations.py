@@ -190,6 +190,58 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX quarantine_by_run ON import_quarantine (run_id, row_number)",
         ),
     ),
+    Migration(
+        version=5,
+        name="rectifiers and groundbeds",
+        statements=(
+            """
+            CREATE TABLE groundbed (
+                code            TEXT PRIMARY KEY,
+                kind            TEXT NOT NULL,
+                material        TEXT NOT NULL,
+                anode_count     INTEGER NOT NULL CHECK (anode_count > 0),
+                anode_mass_kg   REAL NOT NULL CHECK (anode_mass_kg > 0),
+                installed_on    TEXT NOT NULL,
+                design_current_a REAL NOT NULL CHECK (design_current_a > 0),
+                utilisation     REAL NOT NULL CHECK (utilisation > 0 AND utilisation <= 1),
+                description     TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE rectifier (
+                tag                TEXT PRIMARY KEY,
+                line_code          TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m          REAL NOT NULL,
+                groundbed_code     TEXT NOT NULL REFERENCES groundbed(code),
+                rated_voltage_v    REAL NOT NULL CHECK (rated_voltage_v > 0),
+                rated_current_a    REAL NOT NULL CHECK (rated_current_a > 0),
+                coarse_taps        INTEGER NOT NULL CHECK (coarse_taps > 0),
+                fine_taps          INTEGER NOT NULL CHECK (fine_taps > 0),
+                installed_on       TEXT NOT NULL,
+                interrupter_fitted INTEGER NOT NULL DEFAULT 1,
+                description        TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE rectifier_check (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                rectifier_tag    TEXT NOT NULL REFERENCES rectifier(tag) ON DELETE CASCADE,
+                checked_on       TEXT NOT NULL,
+                output_voltage_v REAL NOT NULL CHECK (output_voltage_v >= 0),
+                output_current_a REAL NOT NULL CHECK (output_current_a >= 0),
+                coarse_tap       INTEGER NOT NULL,
+                fine_tap         INTEGER NOT NULL,
+                hour_meter       REAL,
+                technician       TEXT NOT NULL DEFAULT '',
+                comment          TEXT NOT NULL DEFAULT '',
+                UNIQUE (rectifier_tag, checked_on)
+            )
+            """,
+            "CREATE INDEX rectifier_by_line ON rectifier (line_code, station_m)",
+            "CREATE INDEX rectifier_check_by_date ON rectifier_check"
+            " (rectifier_tag, checked_on)",
+        ),
+    ),
 )
 
 
