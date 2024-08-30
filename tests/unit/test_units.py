@@ -12,6 +12,7 @@ from dropcell.units import (
     parse_length_m,
     parse_potential_mv,
     parse_resistivity_ohm_m,
+    parse_voltage_v,
 )
 
 
@@ -107,3 +108,20 @@ def test_formatting_rejects_a_unit_it_cannot_convert() -> None:
         format_potential_mv(-912.0, unit="kV")
     with pytest.raises(UnitError):
         format_length_m(10.0, unit="furlong")
+
+
+def test_a_bare_supply_voltage_is_read_as_volts() -> None:
+    assert parse_voltage_v("18.5") == pytest.approx(18.5)
+    assert parse_voltage_v("18.5 V") == pytest.approx(18.5)
+    assert parse_voltage_v("1200 mV") == pytest.approx(1.2)
+
+
+def test_the_two_defaults_disagree_on_purpose() -> None:
+    assert parse_potential_mv("18.5") == pytest.approx(18.5)
+    assert parse_voltage_v("18.5") == pytest.approx(18.5)
+    assert parse_potential_mv("18.5") != pytest.approx(parse_voltage_v("18.5") * 1000)
+
+
+def test_an_unknown_supply_unit_is_refused() -> None:
+    with pytest.raises(UnitError):
+        parse_voltage_v("18.5 kV")

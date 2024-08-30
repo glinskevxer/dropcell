@@ -28,6 +28,7 @@ from dropcell.units import (
     parse_length_m,
     parse_potential_mv,
     parse_resistivity_ohm_m,
+    parse_voltage_v,
 )
 
 TRUE_WORDS = frozenset({"y", "yes", "true", "t", "1", "x", "on"})
@@ -105,7 +106,7 @@ def _current(value: str, _: Convention) -> float:
 
 
 def _voltage(value: str, _: Convention) -> float:
-    return parse_potential_mv(value) / 1000.0
+    return parse_voltage_v(value)
 
 
 def _resistivity(value: str, _: Convention) -> float:

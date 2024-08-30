@@ -121,6 +121,18 @@ def parse_potential_mv(text: str) -> float:
     return _convert(text, POTENTIAL_UNITS, "potential", "mv")
 
 
+def parse_voltage_v(text: str) -> float:
+    """Read a supply voltage and return volts.
+
+    This is the same table as a potential reads from, with the other default.
+    A bare number in a structure to electrolyte column is millivolts, because
+    that is the scale those readings live on. A bare number in a rectifier
+    output column is volts, for the same reason. Sharing one default between
+    them puts a rectifier on eighteen thousandths of a volt.
+    """
+    return _convert(text, POTENTIAL_UNITS, "voltage", "v") / 1000.0
+
+
 def parse_length_m(text: str) -> float:
     """Read a distance and return metres."""
     return _convert(text, LENGTH_UNITS, "length", "m")

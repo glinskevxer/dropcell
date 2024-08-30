@@ -72,6 +72,11 @@ def test_a_voltage_column_comes_back_in_volts() -> None:
     assert coerce("1200 mV", FieldType.VOLTAGE) == pytest.approx(1.2)
 
 
+def test_a_bare_number_in_a_voltage_column_is_volts_not_millivolts() -> None:
+    assert coerce("18.5", FieldType.VOLTAGE) == pytest.approx(18.5)
+    assert coerce("18.5", FieldType.POTENTIAL) == pytest.approx(18.5)
+
+
 def test_a_station_is_read_in_the_convention_it_was_given() -> None:
     assert coerce("12+45.50", FieldType.STATION) == Station.parse("12+45.50")
     metric = coerce("1+000.0", FieldType.STATION, convention=Convention.METRIC)
