@@ -67,6 +67,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: install build backend
-        run: python -m pip install "hatchling==1.21.1" build
+        run: python -m pip install "hatchling==1.25.0" build
       - name: build the wheel
         run: python -m build --wheel
