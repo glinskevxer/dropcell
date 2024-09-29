@@ -50,6 +50,18 @@ POTENTIAL_UNITS: Final[dict[str, float]] = {
 }
 
 LENGTH_UNITS: Final[dict[str, float]] = {
+    "mm": 0.001,
+    "millimetre": 0.001,
+    "millimetres": 0.001,
+    "cm": 0.01,
+    "centimetre": 0.01,
+    "centimetres": 0.01,
+    "in": 0.0254,
+    "inch": 0.0254,
+    "inches": 0.0254,
+    "yd": 0.9144,
+    "yard": 0.9144,
+    "yards": 0.9144,
     "m": 1.0,
     "metre": 1.0,
     "metres": 1.0,

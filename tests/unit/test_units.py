@@ -58,7 +58,17 @@ def test_the_unit_error_names_what_it_would_have_accepted() -> None:
 
 @pytest.mark.parametrize(
     ("text", "expected"),
-    [("100 ft", 30.48), ("1 mi", 1609.344), ("2.5 km", 2500.0), ("18", 18.0)],
+    [
+        ("100 ft", 30.48),
+        ("1 mi", 1609.344),
+        ("2.5 km", 2500.0),
+        ("18", 18.0),
+        ("323.9 mm", 0.3239),
+        ("6.35 mm", 0.00635),
+        ("12.75 in", 0.32385),
+        ("50 cm", 0.5),
+        ("10 yd", 9.144),
+    ],
 )
 def test_lengths_land_on_metres(text: str, expected: float) -> None:
     assert parse_length_m(text) == pytest.approx(expected)
