@@ -14,6 +14,7 @@ import click
 
 from dropcell import __version__
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.cli.imports import import_group
 from dropcell.cli.lines import line_group, segment_group
 from dropcell.cli.posts import post_group
 from dropcell.store.migrations import latest_version
@@ -76,6 +77,7 @@ def schema_command(context: Context) -> None:
 main.add_command(line_group)
 main.add_command(segment_group)
 main.add_command(post_group)
+main.add_command(import_group)
 
 
 if __name__ == "__main__":

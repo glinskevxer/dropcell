@@ -1,0 +1,150 @@
+"""Commands for getting files into the register.
+
+Each command prints what landed, what was set aside and why. That output is the
+whole point: an import that says nothing is an import nobody checks, and the
+rows that did not land are exactly the ones somebody has to go and chase.
+
+There is a dry run on every one of them. Field data arrives from people who are
+not in the office and cannot be asked a question quickly, so being able to see
+what a file would do before it does it saves a day.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from pathlib import Path
+
+import click
+
+from dropcell.cli.context import Context, handled, pass_context
+from dropcell.electrodes import Electrode
+from dropcell.ingest.annual import ImportOutcome, import_annual
+from dropcell.ingest.profiles import get_profile, profile_names
+from dropcell.ingest.reader import read_text
+from dropcell.ingest.rectifier import import_rectifier_checks
+from dropcell.report.table import Column, Table
+from dropcell.stationing import Convention
+from dropcell.store.imports import ImportLedger
+
+RUN_COLUMNS = (
+    Column("id", "Run", align="right"),
+    Column("when", "Loaded"),
+    Column("kind", "Kind"),
+    Column("profile", "Profile"),
+    Column("source", "File", width=30),
+    Column("in", "Rows in", align="right"),
+    Column("out", "Held", align="right"),
+)
+
+
+@click.group("import")
+def import_group() -> None:
+    """Load vendor files into the register."""
+
+
+def _report(outcome: ImportOutcome) -> None:
+    click.echo(f"{outcome.written} rows written from {outcome.source or 'the input'}")
+    if outcome.quarantined:
+        click.echo(f"{outcome.quarantined} rows could not be read")
+    for reason in outcome.reasons():
+        click.echo(f"  {reason}")
+
+
+def _dry_run(text: str, profile_name: str, convention: Convention, source: str) -> None:
+    result = read_text(text, get_profile(profile_name), convention=convention, source=source)
+    click.echo(f"{result.accepted} rows would read, {result.rejected} would be held")
+    for held in result.quarantine:
+        click.echo(f"  {held.summary}")
+
+
+@import_group.command("profiles")
+@handled
+def list_profiles() -> None:
+    """List the file formats this build knows."""
+    table = Table(columns=(Column("name", "Profile"), Column("about", "Reads", width=52)))
+    for name in profile_names():
+        table.add(name=name, about=get_profile(name).description)
+    click.echo(table.render())
+
+
+@import_group.command("annual")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--electrode",
+    type=click.Choice([str(item) for item in Electrode]),
+    default=str(Electrode.CSE),
+    show_default=True,
+)
+@click.option("--dry-run", is_flag=True, help="Say what would happen and stop.")
+@pass_context
+@handled
+def import_annual_command(context: Context, path: Path, electrode: str, dry_run: bool) -> None:
+    """Load an annual test post survey."""
+    text = path.read_text(encoding="utf-8")
+    if dry_run:
+        _dry_run(text, "annual", Convention.FOOT, path.name)
+        return
+    outcome = import_annual(
+        context.database(),
+        text,
+        now=dt.datetime.combine(context.today, dt.time(12, 0)),
+        source=path.name,
+        electrode=Electrode(electrode),
+    )
+    _report(outcome)
+
+
+@import_group.command("rectifier")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--dry-run", is_flag=True, help="Say what would happen and stop.")
+@pass_context
+@handled
+def import_rectifier_command(context: Context, path: Path, dry_run: bool) -> None:
+    """Load a rectifier check sheet."""
+    text = path.read_text(encoding="utf-8")
+    if dry_run:
+        _dry_run(text, "rectifier", Convention.FOOT, path.name)
+        return
+    outcome = import_rectifier_checks(
+        context.database(),
+        text,
+        now=dt.datetime.combine(context.today, dt.time(12, 0)),
+        source=path.name,
+    )
+    _report(outcome)
+
+
+@import_group.command("runs")
+@click.option("--limit", type=int, default=20, show_default=True)
+@click.option("--kind", default=None, help="Only runs of this kind.")
+@pass_context
+@handled
+def list_runs(context: Context, limit: int, kind: str | None) -> None:
+    """List what has been loaded."""
+    ledger = ImportLedger(context.database())
+    table = Table(columns=RUN_COLUMNS, empty_note="nothing has been loaded")
+    for run in ledger.recent(limit, kind=kind):
+        table.add(
+            id=run.run_id,
+            when=run.imported_at.date().isoformat(),
+            kind=run.kind,
+            profile=run.profile,
+            source=run.source,
+            **{"in": run.accepted, "out": run.rejected},
+        )
+    click.echo(table.render())
+
+
+@import_group.command("held")
+@click.argument("run_id", type=int)
+@pass_context
+@handled
+def show_held(context: Context, run_id: int) -> None:
+    """Show the rows one run could not read."""
+    ledger = ImportLedger(context.database())
+    run = ledger.get(run_id)
+    held = ledger.quarantine_for(run_id)
+    click.echo(f"run {run.run_id}, {run.source or 'unnamed'}, {len(held)} rows held")
+    for row in held:
+        click.echo(f"  {row.summary}")
+        click.echo(f"    {', '.join(row.raw)}")
