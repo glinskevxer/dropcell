@@ -108,8 +108,19 @@ def build_register(
 
 
 def overdue(register: list[DueItem]) -> list[DueItem]:
-    """Only the work that is already late."""
-    return [item for item in register if item.overdue or not item.ever_visited]
+    """Only the work that is already late.
+
+    An asset that has never been visited is late once its own interval has run
+    from the day it went into service, and not before. A post installed last
+    month is not overdue, however empty its history looks. The one exception is
+    an asset with no service date at all, which has no clock to measure against
+    and belongs on the list until somebody supplies one.
+    """
+    return [
+        item
+        for item in register
+        if item.overdue or (not item.ever_visited and item.next_due is None)
+    ]
 
 
 def due_within(register: list[DueItem], days: int, *, as_of: dt.date) -> list[DueItem]:

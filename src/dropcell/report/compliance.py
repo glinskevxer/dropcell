@@ -75,8 +75,9 @@ def upcoming_table(
 ) -> Table:
     """What has to be planned for."""
     table = Table(columns=UPCOMING_COLUMNS, title=title, empty_note="nothing due in the window")
+    late = {(item.asset_code, item.rule_key) for item in overdue(register)}
     for item in due_within(register, days, as_of=as_of):
-        if item.overdue or not item.ever_visited:
+        if (item.asset_code, item.rule_key) in late:
             continue
         table.add(
             asset=item.asset_code,
