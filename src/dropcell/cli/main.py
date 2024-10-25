@@ -20,6 +20,7 @@ from dropcell.cli.lines import line_group, segment_group
 from dropcell.cli.posts import post_group
 from dropcell.cli.rectifiers import rectifier_group
 from dropcell.cli.reports import report_group
+from dropcell.cli.survey import survey_group
 from dropcell.store.migrations import latest_version
 
 DEFAULT_REGISTER = "cp.sqlite"
@@ -84,6 +85,7 @@ main.add_command(import_group)
 main.add_command(report_group)
 main.add_command(finding_group)
 main.add_command(rectifier_group)
+main.add_command(survey_group)
 
 
 if __name__ == "__main__":
