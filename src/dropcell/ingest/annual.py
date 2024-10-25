@@ -30,7 +30,7 @@ from dropcell.ingest.profiles import ANNUAL_PROFILE
 from dropcell.ingest.reader import ReadResult, read_text
 from dropcell.model.enums import LeadKind
 from dropcell.model.ids import normalise_code
-from dropcell.model.testpoint import Reading
+from dropcell.model.reading import Reading
 from dropcell.store.database import Database
 from dropcell.store.imports import ImportLedger, ImportRun
 from dropcell.store.readings import ReadingRepository

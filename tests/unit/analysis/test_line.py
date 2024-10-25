@@ -9,8 +9,9 @@ from dropcell.analysis.line import assess_line
 from dropcell.errors import NotFoundError
 from dropcell.model.enums import LeadKind, ProtectionMethod
 from dropcell.model.line import Line
+from dropcell.model.reading import Reading
 from dropcell.model.segment import Segment
-from dropcell.model.testpoint import Reading, TestPoint
+from dropcell.model.testpoint import TestPoint
 from dropcell.stationing import Station
 from dropcell.store.database import Database
 from dropcell.store.lines import LineRepository

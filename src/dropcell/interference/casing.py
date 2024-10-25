@@ -30,7 +30,7 @@ from enum import StrEnum
 
 from dropcell.errors import ValidationError
 from dropcell.model.ids import normalise_code
-from dropcell.model.testpoint import check_potential
+from dropcell.model.reading import check_potential
 from dropcell.stationing import Station
 
 METALLIC_SHORT_MV = 10.0

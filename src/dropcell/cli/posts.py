@@ -18,7 +18,8 @@ import click
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.electrodes import Electrode
 from dropcell.model.enums import LeadKind
-from dropcell.model.testpoint import Reading, TestPoint
+from dropcell.model.reading import Reading
+from dropcell.model.testpoint import TestPoint
 from dropcell.report.table import Column, Table
 from dropcell.stationing import Station
 from dropcell.store.lines import LineRepository

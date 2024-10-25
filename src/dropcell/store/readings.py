@@ -19,7 +19,7 @@ from collections.abc import Iterable
 from dropcell.electrodes import Electrode
 from dropcell.model.enums import LeadKind
 from dropcell.model.ids import normalise_code
-from dropcell.model.testpoint import Reading
+from dropcell.model.reading import Reading
 from dropcell.store.database import Database
 
 READING_COLUMNS = (

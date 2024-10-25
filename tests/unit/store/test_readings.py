@@ -9,7 +9,8 @@ from dropcell.electrodes import Electrode
 from dropcell.errors import ConflictError
 from dropcell.model.enums import LeadKind
 from dropcell.model.line import Line
-from dropcell.model.testpoint import Reading, TestPoint
+from dropcell.model.reading import Reading
+from dropcell.model.testpoint import TestPoint
 from dropcell.stationing import Station
 from dropcell.store.database import Database
 from dropcell.store.lines import LineRepository
