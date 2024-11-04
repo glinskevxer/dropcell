@@ -242,6 +242,42 @@ MIGRATIONS: tuple[Migration, ...] = (
             " (rectifier_tag, checked_on)",
         ),
     ),
+    Migration(
+        version=6,
+        name="coupons",
+        statements=(
+            """
+            CREATE TABLE coupon (
+                code            TEXT PRIMARY KEY,
+                test_point_code TEXT NOT NULL
+                                REFERENCES test_point(code) ON DELETE CASCADE,
+                area_m2         REAL NOT NULL CHECK (area_m2 > 0),
+                shunt_ohm       REAL NOT NULL CHECK (shunt_ohm > 0),
+                installed_on    TEXT NOT NULL,
+                orientation     TEXT NOT NULL DEFAULT 'side',
+                depth_m         REAL NOT NULL DEFAULT 1.2 CHECK (depth_m > 0),
+                description     TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE coupon_reading (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                coupon_code      TEXT NOT NULL REFERENCES coupon(code) ON DELETE CASCADE,
+                taken_on         TEXT NOT NULL,
+                on_mv            REAL NOT NULL,
+                disconnected_mv  REAL,
+                dc_shunt_mv      REAL,
+                ac_shunt_mv      REAL,
+                ac_voltage_v     REAL,
+                technician       TEXT NOT NULL DEFAULT '',
+                comment          TEXT NOT NULL DEFAULT '',
+                UNIQUE (coupon_code, taken_on)
+            )
+            """,
+            "CREATE INDEX coupon_by_post ON coupon (test_point_code)",
+            "CREATE INDEX coupon_reading_by_date ON coupon_reading (coupon_code, taken_on)",
+        ),
+    ),
 )
 
 
