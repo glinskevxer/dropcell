@@ -13,14 +13,17 @@ from dropcell.analysis.coverage import coverage
 from dropcell.analysis.line import assess_line
 from dropcell.analysis.schedule import line_histories
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.model.enums import LeadKind
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
+from dropcell.report.export import findings_csv, readings_csv
 from dropcell.report.protection import render_protection
 from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
 from dropcell.schedule.register import build_register
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
+from dropcell.store.readings import ReadingRepository
 from dropcell.store.segments import SegmentRepository
 from dropcell.store.testpoints import TestPointRepository
 from dropcell.units import parse_length_m
@@ -130,3 +133,55 @@ def coverage_report(context: Context, line_code: str, reach: str) -> None:
             length=gap.length_m,
         )
     click.echo(table.render())
+
+
+@report_group.command("export")
+@click.argument("what", type=click.Choice(["findings", "readings"]))
+@click.option("--line", "line_code", required=True)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, writable=True),
+    default=None,
+    help="Write here instead of to standard output.",
+)
+@click.option("--all", "include_closed", is_flag=True, help="Closed findings as well.")
+@click.option(
+    "--lead",
+    type=click.Choice([str(item) for item in LeadKind]),
+    default=None,
+    help="Only readings off this lead.",
+)
+@pass_context
+@handled
+def export(
+    context: Context,
+    what: str,
+    line_code: str,
+    out_path: str | None,
+    include_closed: bool,
+    lead: str | None,
+) -> None:
+    """Write findings or readings out as CSV."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    if what == "findings":
+        findings = FindingRepository(database)
+        rows = (
+            findings.for_line(line.code)
+            if include_closed
+            else findings.open_findings(line.code)
+        )
+        text = findings_csv(rows, convention=line.convention)
+    else:
+        text = readings_csv(
+            ReadingRepository(database).for_line(
+                line.code, lead=None if lead is None else LeadKind(lead)
+            )
+        )
+    if out_path is None:
+        click.echo(text, nl=False)
+        return
+    with open(out_path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
+    context.say(f"written to {out_path}")
