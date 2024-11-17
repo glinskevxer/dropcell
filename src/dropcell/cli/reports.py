@@ -12,11 +12,13 @@ import click
 from dropcell.analysis.coverage import coverage
 from dropcell.analysis.line import assess_line
 from dropcell.analysis.schedule import line_histories
+from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import LeadKind
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
 from dropcell.report.export import findings_csv, readings_csv
+from dropcell.report.kpi import build_kpis
 from dropcell.report.protection import render_protection
 from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
@@ -185,3 +187,86 @@ def export(
     with open(out_path, "w", encoding="utf-8", newline="") as handle:
         handle.write(text)
     context.say(f"written to {out_path}")
+
+
+TREND_COLUMNS = (
+    Column("code", "Post"),
+    Column("station", "Station", align="right"),
+    Column("readings", "Readings", align="right"),
+    Column("span", "Span yr", align="right", format=".1f"),
+    Column("latest", "Latest mV", align="right", format=".0f"),
+    Column("slope", "Drift mV/yr", align="right", format=".1f"),
+    Column("residual", "Scatter mV", align="right", format=".0f"),
+    Column("crosses", "Reaches -850"),
+)
+
+
+@report_group.command("kpi")
+@click.option("--line", "line_code", required=True)
+@pass_context
+@handled
+def kpi_report(context: Context, line_code: str) -> None:
+    """One line's programme on one page."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    assessment = assess_line(database, line.code, as_of=context.today)
+    segments = SegmentRepository(database).for_line(line.code)
+    posts = TestPointRepository(database).for_line(line.code)
+    register = build_register(
+        STANDARD_POLICY, line_histories(database, line.code), as_of=context.today
+    )
+    findings = FindingRepository(database).for_line(line.code)
+    kpis = build_kpis(assessment, register, coverage(line, segments, posts), findings)
+    click.echo(kpis.render())
+
+
+@report_group.command("trend")
+@click.option("--line", "line_code", required=True)
+@click.option(
+    "--horizon", type=float, default=20.0, show_default=True, help="Years to look ahead."
+)
+@click.option(
+    "--only-drifting", is_flag=True, help="Leave out posts that are not losing ground."
+)
+@pass_context
+@handled
+def trend_report(context: Context, line_code: str, horizon: float, only_drifting: bool) -> None:
+    """How each post has moved over the readings it has."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    posts = TestPointRepository(database).for_line(line.code)
+    readings = ReadingRepository(database)
+    trends = []
+    stations = {}
+    for post in posts:
+        history = readings.for_point(post.code, lead=LeadKind.PIPE)
+        trend = fit_trend(post.code, history)
+        if trend is None:
+            continue
+        if only_drifting and not trend.drifting_positive:
+            continue
+        stations[post.code] = line.format_station(post.station)
+        trends.append(trend)
+    table = Table(
+        columns=TREND_COLUMNS,
+        title=f"Drift, {line.code}",
+        empty_note="no post has enough readings to fit a line through",
+    )
+    for trend in worst_drift_first(trends):
+        crossing = trend.crosses(horizon_years=horizon)
+        table.add(
+            code=trend.test_point_code,
+            station=stations[trend.test_point_code],
+            readings=trend.readings,
+            span=trend.span_years,
+            latest=trend.latest_mv,
+            slope=trend.slope_mv_per_year,
+            residual=trend.residual_mv,
+            crosses=crossing.isoformat() if crossing else "",
+        )
+    click.echo(table.render())
+    soon = crossing_within(trends, horizon)
+    click.echo("")
+    click.echo(
+        f"{len(soon)} of {len(trends)} fitted posts reach criterion inside {horizon:.0f} years"
+    )
