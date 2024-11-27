@@ -122,3 +122,10 @@ def test_every_profile_declares_a_type_for_every_column() -> None:
     for profile in PROFILES.values():
         for column in profile.columns:
             assert isinstance(column.field_type, FieldType)
+
+
+def test_the_gradient_profile_lets_the_date_come_from_outside_the_file() -> None:
+    assert "found_on" not in DCVG_PROFILE.required_fields
+    result = read_text("Station,Gradient,Total Shift\n12+45.50,40,400\n", DCVG_PROFILE)
+    assert result.accepted == 1
+    assert result.rows[0]["found_on"] is None

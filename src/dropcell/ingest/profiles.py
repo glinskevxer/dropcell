@@ -118,7 +118,12 @@ DCVG_PROFILE = MappingProfile(
     description="gradient survey indications, one row per defect",
     columns=(
         ColumnMapping("station", FieldType.STATION, ("Station", "Chainage", "Location")),
-        ColumnMapping("found_on", FieldType.DATE, ("Date", "Survey Date")),
+        ColumnMapping(
+            "found_on",
+            FieldType.DATE,
+            ("Date", "Survey Date"),
+            required=False,
+        ),
         ColumnMapping(
             "gradient_mv", FieldType.POTENTIAL, ("Gradient", "Defect mV", "dV", "Signal")
         ),
