@@ -278,6 +278,64 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX coupon_reading_by_date ON coupon_reading (coupon_code, taken_on)",
         ),
     ),
+    Migration(
+        version=7,
+        name="casings, crossings, bonds and isolating joints",
+        statements=(
+            """
+            CREATE TABLE casing (
+                code         TEXT PRIMARY KEY,
+                line_code    TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m    REAL NOT NULL,
+                length_m     REAL NOT NULL DEFAULT 20 CHECK (length_m > 0),
+                carries      TEXT NOT NULL DEFAULT '',
+                installed_on TEXT NOT NULL,
+                description  TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE crossing (
+                code             TEXT PRIMARY KEY,
+                line_code        TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m        REAL NOT NULL,
+                foreign_operator TEXT NOT NULL,
+                foreign_structure TEXT NOT NULL,
+                bonded           INTEGER NOT NULL DEFAULT 0,
+                description      TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE bond (
+                code            TEXT PRIMARY KEY,
+                line_code       TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m       REAL NOT NULL,
+                kind            TEXT NOT NULL,
+                to_structure    TEXT NOT NULL,
+                installed_on    TEXT NOT NULL,
+                design_current_a REAL NOT NULL CHECK (design_current_a > 0),
+                resistor_ohm    REAL,
+                critical        INTEGER NOT NULL DEFAULT 0,
+                description     TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE isolation_joint (
+                code                   TEXT PRIMARY KEY,
+                line_code              TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m              REAL NOT NULL,
+                kind                   TEXT NOT NULL,
+                separates              TEXT NOT NULL,
+                installed_on           TEXT NOT NULL,
+                surge_protector_fitted INTEGER NOT NULL DEFAULT 0,
+                description            TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            "CREATE INDEX casing_by_line ON casing (line_code, station_m)",
+            "CREATE INDEX crossing_by_line ON crossing (line_code, station_m)",
+            "CREATE INDEX bond_by_line ON bond (line_code, station_m)",
+            "CREATE INDEX joint_by_line ON isolation_joint (line_code, station_m)",
+        ),
+    ),
 )
 
 
