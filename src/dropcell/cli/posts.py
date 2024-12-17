@@ -15,13 +15,13 @@ import datetime as dt
 
 import click
 
+from dropcell.cli.common import line_at
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.electrodes import Electrode
 from dropcell.model.enums import LeadKind
 from dropcell.model.reading import Reading
 from dropcell.model.testpoint import TestPoint
 from dropcell.report.table import Column, Table
-from dropcell.stationing import Station
 from dropcell.store.lines import LineRepository
 from dropcell.store.readings import ReadingRepository
 from dropcell.store.testpoints import TestPointRepository
@@ -83,11 +83,11 @@ def add_post(
 ) -> None:
     """Add a test post to a line."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     post = TestPoint(
         code=code,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         leads=frozenset(LeadKind(item) for item in leads),
         installed_on=dt.date.fromisoformat(installed),
         description=description,

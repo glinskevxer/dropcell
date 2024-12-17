@@ -17,11 +17,12 @@ import datetime as dt
 
 import click
 
+from dropcell.cli.common import line_span
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.findings.finding import Finding, FindingKind, FindingState
 from dropcell.findings.raise_from import format_code, next_sequence
 from dropcell.report.table import Column, Table
-from dropcell.stationing import Station, StationRange
+from dropcell.stationing import StationRange
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
 
@@ -67,10 +68,8 @@ def raise_finding(
 ) -> None:
     """Raise an exception against a stretch of line."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, first, last = line_span(database, line_code, start, end)
     findings = FindingRepository(database)
-    first = Station.parse(start, line.convention)
-    last = Station.parse(end, line.convention) if end else first
     code = format_code(
         context.today.year,
         next_sequence([item.code for item in findings.all()], context.today.year),

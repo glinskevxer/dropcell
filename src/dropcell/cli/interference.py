@@ -16,6 +16,7 @@ import datetime as dt
 
 import click
 
+from dropcell.cli.common import line_at
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.interference.bonds import Bond, BondCheck, BondKind, assess_bond
 from dropcell.interference.casing import CasingTest, classify_casing
@@ -28,7 +29,6 @@ from dropcell.interference.isolation import (
 )
 from dropcell.model.casing import Casing
 from dropcell.report.table import Column, Table
-from dropcell.stationing import Station
 from dropcell.store.interference import (
     BondRepository,
     CasingRepository,
@@ -71,11 +71,11 @@ def add_casing(
 ) -> None:
     """Add a cased crossing."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     casing = Casing(
         code=code,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         installed_on=dt.date.fromisoformat(installed),
         length_m=parse_length_m(length),
         carries=carries,
@@ -104,11 +104,11 @@ def add_crossing(
 ) -> None:
     """Add a foreign structure crossing."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     crossing = Crossing(
         code=code,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         foreign_operator=foreign_operator,
         foreign_structure=foreign_structure,
         bonded=bonded,
@@ -143,11 +143,11 @@ def add_bond(
 ) -> None:
     """Add a bond."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     bond = Bond(
         code=code,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         kind=BondKind(kind),
         to_structure=to_structure,
         installed_on=dt.date.fromisoformat(installed),
@@ -181,11 +181,11 @@ def add_joint(
 ) -> None:
     """Add an isolating joint."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     joint = IsolationJoint(
         code=code,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         kind=JointKind(kind),
         separates=separates,
         installed_on=dt.date.fromisoformat(installed),

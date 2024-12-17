@@ -19,12 +19,12 @@ import datetime as dt
 import click
 
 from dropcell.analysis.groundbed import assess_bed
+from dropcell.cli.common import line_at
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import AnodeMaterial, GroundbedKind
 from dropcell.model.groundbed import Groundbed
 from dropcell.model.rectifier import Rectifier, RectifierCheck
 from dropcell.report.table import Column, Table
-from dropcell.stationing import Station
 from dropcell.store.lines import LineRepository
 from dropcell.store.rectifiers import (
     GroundbedRepository,
@@ -122,11 +122,11 @@ def add_rectifier(
 ) -> None:
     """Add a rectifier to a line."""
     database = context.database()
-    line = LineRepository(database).get(line_code)
+    line, at = line_at(database, line_code, station)
     unit = Rectifier(
         tag=tag,
         line_code=line.code,
-        station=line.require_on_line(Station.parse(station, line.convention)),
+        station=at,
         groundbed_code=groundbed_code,
         rated_voltage_v=parse_voltage_v(rated_volts),
         rated_current_a=parse_current_a(rated_amps),
