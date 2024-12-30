@@ -17,14 +17,18 @@ from pathlib import Path
 
 import click
 
+from dropcell.analysis.priority import score_defect
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
 from dropcell.findings.raise_from import from_cis_sections
 from dropcell.ingest.cis import import_cis
+from dropcell.ingest.dcvg import import_dcvg
+from dropcell.report.dig import DigItem, render_dig_sheet
 from dropcell.report.table import Column, Table
 from dropcell.stationing import Convention
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
+from dropcell.store.segments import SegmentRepository
 from dropcell.survey.cis import CisSurvey
 from dropcell.survey.sections import find_under_criterion, total_under_criterion_m
 from dropcell.survey.spikes import find_spikes, without_spikes
@@ -179,3 +183,67 @@ def _spike_table(spikes: list, convention: Convention, kept: bool) -> Table:  # 
 
 
 DEFAULT_THRESHOLD_MV = DEFAULT_PROTECTION_MV
+
+
+@survey_group.command("dcvg")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--line", "line_code", required=True)
+@click.option("--date", "found_on", default=None, help="Date, if the file has none.")
+@click.option("--budget", type=int, default=None, help="Only the worst this many.")
+@click.option("--contact", default="", help="Who a contractor rings before digging.")
+@pass_context
+@handled
+def analyse_dcvg(
+    context: Context,
+    path: Path,
+    line_code: str,
+    found_on: str | None,
+    budget: int | None,
+    contact: str,
+) -> None:
+    """Read a gradient file and turn it into a dig sheet."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    segments = SegmentRepository(database).for_line(line.code)
+    loaded = import_dcvg(
+        database,
+        path.read_text(encoding="utf-8"),
+        line_code=line.code,
+        now=dt.datetime.combine(context.today, dt.time(12, 0)),
+        source=path.name,
+        convention=line.convention,
+        default_found_on=dt.date.fromisoformat(found_on) if found_on else None,
+    )
+    items: list[DigItem] = []
+    off_segment: list[str] = []
+    for index, indication in enumerate(loaded.indications, start=1):
+        segment = next((item for item in segments if item.contains(indication.station)), None)
+        reference = f"{line.code}-D{index:03d}"
+        if segment is None:
+            off_segment.append(indication.station.format(line.convention))
+            continue
+        items.append(
+            DigItem(
+                score=score_defect(
+                    reference,
+                    category=indication.category,
+                    segment=segment,
+                    commodity=line.commodity,
+                    anodic=indication.anodic,
+                    age_years=context.today.year - segment.installed_year,
+                ),
+                station=indication.station,
+                segment=segment,
+            )
+        )
+    click.echo(f"{loaded.found} indications read from {path.name}")
+    if loaded.quarantined:
+        click.echo(f"{loaded.quarantined} rows could not be read")
+    for reason in loaded.reasons():
+        click.echo(f"  {reason}")
+    if off_segment:
+        click.echo(f"{len(off_segment)} indications sit on pipe no segment describes")
+    click.echo("")
+    click.echo(
+        render_dig_sheet(line, items, as_of=context.today, contact=contact, budget=budget)
+    )
