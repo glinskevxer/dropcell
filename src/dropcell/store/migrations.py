@@ -336,6 +336,38 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX joint_by_line ON isolation_joint (line_code, station_m)",
         ),
     ),
+    Migration(
+        version=8,
+        name="work orders",
+        statements=(
+            """
+            CREATE TABLE work_order (
+                code         TEXT PRIMARY KEY,
+                line_code    TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                kind         TEXT NOT NULL,
+                raised_on    TEXT NOT NULL,
+                summary      TEXT NOT NULL,
+                state        TEXT NOT NULL DEFAULT 'draft',
+                planned_for  TEXT,
+                completed_on TEXT,
+                contractor   TEXT NOT NULL DEFAULT '',
+                estimate     REAL,
+                actual       REAL,
+                notes        TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE work_order_finding (
+                work_order_code TEXT NOT NULL
+                                REFERENCES work_order(code) ON DELETE CASCADE,
+                finding_code    TEXT NOT NULL REFERENCES finding(code) ON DELETE CASCADE,
+                PRIMARY KEY (work_order_code, finding_code)
+            )
+            """,
+            "CREATE INDEX work_order_by_line ON work_order (line_code, state)",
+            "CREATE INDEX work_order_finding_by_finding ON work_order_finding (finding_code)",
+        ),
+    ),
 )
 
 
