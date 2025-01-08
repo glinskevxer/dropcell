@@ -13,6 +13,7 @@ import datetime as dt
 import click
 
 from dropcell import __version__
+from dropcell.cli.admin import register_group
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.cli.findings import finding_group
 from dropcell.cli.imports import import_group
@@ -90,6 +91,7 @@ main.add_command(rectifier_group)
 main.add_command(survey_group)
 main.add_command(plant_group)
 main.add_command(work_group)
+main.add_command(register_group)
 
 
 if __name__ == "__main__":
