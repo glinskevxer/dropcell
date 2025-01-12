@@ -24,6 +24,7 @@ from typing import Any, TypeVar
 
 import click
 
+from dropcell.config import Settings
 from dropcell.errors import (
     ConflictError,
     DropcellError,
@@ -65,6 +66,7 @@ class Context:
     register_path: str
     today: dt.date
     quiet: bool = False
+    settings: Settings = field(default_factory=Settings)
     _database: Database | None = field(default=None, repr=False)
 
     def database(self) -> Database:

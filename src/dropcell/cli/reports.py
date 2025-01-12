@@ -101,16 +101,19 @@ def compliance_report(context: Context, line_code: str, window: int) -> None:
 
 @report_group.command("coverage")
 @click.option("--line", "line_code", required=True)
-@click.option("--reach", default="1600 m", show_default=True, help="How far a post speaks for.")
+@click.option(
+    "--reach", default=None, help="How far a post speaks for. Defaults to the settings."
+)
 @pass_context
 @handled
-def coverage_report(context: Context, line_code: str, reach: str) -> None:
+def coverage_report(context: Context, line_code: str, reach: str | None) -> None:
     """How much of the line the posts can see."""
     database = context.database()
     line = LineRepository(database).get(line_code)
     segments = SegmentRepository(database).for_line(line.code)
     posts = TestPointRepository(database).for_line(line.code)
-    result = coverage(line, segments, posts, reach_m=parse_length_m(reach))
+    reach_m = context.settings.post_reach_m if reach is None else parse_length_m(reach)
+    result = coverage(line, segments, posts, reach_m=reach_m)
     click.echo(f"Coverage, {line.code} {line.name}")
     click.echo(f"as at {context.today.isoformat()}")
     click.echo("")

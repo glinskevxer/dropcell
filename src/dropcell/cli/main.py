@@ -9,6 +9,7 @@ the top level except the two commands that have nowhere else to go.
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import click
 
@@ -24,6 +25,7 @@ from dropcell.cli.rectifiers import rectifier_group
 from dropcell.cli.reports import report_group
 from dropcell.cli.survey import survey_group
 from dropcell.cli.work import work_group
+from dropcell.config import load_or_default
 from dropcell.store.migrations import latest_version
 
 DEFAULT_REGISTER = "cp.sqlite"
@@ -33,10 +35,17 @@ DEFAULT_REGISTER = "cp.sqlite"
 @click.option(
     "--register",
     "register_path",
-    default=DEFAULT_REGISTER,
-    show_default=True,
+    default=None,
     envvar="DROPCELL_REGISTER",
-    help="Path to the SQLite register.",
+    help="Path to the SQLite register. Defaults to the settings file, then cp.sqlite.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    envvar="DROPCELL_CONFIG",
+    help="Settings file. Defaults to the nearest dropcell.toml.",
 )
 @click.option(
     "--today",
@@ -49,13 +58,20 @@ DEFAULT_REGISTER = "cp.sqlite"
 @click.pass_context
 def main(
     ctx: click.Context,
-    register_path: str,
+    register_path: str | None,
+    config_path: Path | None,
     today: str | None,
     quiet: bool,
 ) -> None:
     """Cathodic protection monitoring for buried steel pipelines."""
     anchor = dt.date.fromisoformat(today) if today else dt.date.today()
-    ctx.obj = Context(register_path=register_path, today=anchor, quiet=quiet)
+    settings = load_or_default(config_path)
+    ctx.obj = Context(
+        register_path=register_path or settings.register or DEFAULT_REGISTER,
+        today=anchor,
+        quiet=quiet,
+        settings=settings,
+    )
     ctx.call_on_close(ctx.obj.close)
 
 
@@ -66,6 +82,24 @@ def init_command(context: Context) -> None:
     """Create the register, or bring an existing one up to date."""
     context.database()
     click.echo(f"{context.register_path} is at schema version {latest_version()}")
+
+
+@main.command("settings")
+@pass_context
+@handled
+def settings_command(context: Context) -> None:
+    """Print the settings in force and where they came from."""
+    import dataclasses
+
+    from dropcell.config import find
+
+    found = find()
+    click.echo(f"settings file  {found if found else 'none, using the defaults'}")
+    click.echo(f"register       {context.register_path}")
+    for field_name, value in dataclasses.asdict(context.settings).items():
+        if field_name == "register":
+            continue
+        click.echo(f"{field_name:<22} {value if value != '' else '(not set)'}")
 
 
 @main.command("schema")

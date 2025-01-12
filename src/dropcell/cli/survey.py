@@ -62,7 +62,7 @@ def survey_group() -> None:
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--line", "line_code", required=True)
 @click.option("--date", "taken_on", required=True, help="Date the survey was walked.")
-@click.option("--threshold", default="-850 mV", show_default=True)
+@click.option("--threshold", default=None, help="Defaults to the settings file.")
 @click.option("--gap", default="0 m", show_default=True, help="Bridge gaps up to this.")
 @click.option("--minimum", default="0 m", show_default=True, help="Drop sections shorter.")
 @click.option("--step", default=None, help="Override the walking interval.")
@@ -76,7 +76,7 @@ def analyse_cis(
     path: Path,
     line_code: str,
     taken_on: str,
-    threshold: str,
+    threshold: str | None,
     gap: str,
     minimum: str,
     step: str | None,
@@ -103,7 +103,11 @@ def analyse_cis(
         survey = without_spikes(survey, spikes)
     sections = find_under_criterion(
         survey,
-        threshold_mv=parse_potential_mv(threshold),
+        threshold_mv=(
+            context.settings.protection_mv
+            if threshold is None
+            else parse_potential_mv(threshold)
+        ),
         gap_tolerance_m=parse_length_m(gap),
         minimum_length_m=parse_length_m(minimum),
     )
@@ -214,6 +218,7 @@ def analyse_dcvg(
         convention=line.convention,
         default_found_on=dt.date.fromisoformat(found_on) if found_on else None,
     )
+    chosen_budget = budget if budget is not None else context.settings.dig_budget
     items: list[DigItem] = []
     off_segment: list[str] = []
     for index, indication in enumerate(loaded.indications, start=1):
@@ -245,5 +250,11 @@ def analyse_dcvg(
         click.echo(f"{len(off_segment)} indications sit on pipe no segment describes")
     click.echo("")
     click.echo(
-        render_dig_sheet(line, items, as_of=context.today, contact=contact, budget=budget)
+        render_dig_sheet(
+            line,
+            items,
+            as_of=context.today,
+            contact=contact or context.settings.contact,
+            budget=chosen_budget,
+        )
     )
