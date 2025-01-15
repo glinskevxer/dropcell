@@ -66,6 +66,7 @@ class Database:
     def __init__(self, path: Path | str) -> None:
         self.path = str(path)
         self._connection = connect(path)
+        self.statements = 0
 
     @property
     def connection(self) -> sqlite3.Connection:
@@ -73,7 +74,14 @@ class Database:
         return self._connection
 
     def execute(self, sql: str, parameters: Sequence[Any] = ()) -> sqlite3.Cursor:
-        """Run one statement and hand back its cursor."""
+        """Run one statement and hand back its cursor.
+
+        The counter is not instrumentation for its own sake. Several of the
+        reports walk a few hundred posts, and the difference between one query
+        and one query per post is the difference between a report that runs and
+        one nobody waits for. A count is the only way to hold that in a test.
+        """
+        self.statements += 1
         try:
             return self._connection.execute(sql, tuple(parameters))
         except sqlite3.IntegrityError as exc:
@@ -83,6 +91,7 @@ class Database:
 
     def executemany(self, sql: str, rows: Sequence[Sequence[Any]]) -> sqlite3.Cursor:
         """Run one statement over many parameter sets."""
+        self.statements += 1
         try:
             return self._connection.executemany(sql, [tuple(row) for row in rows])
         except sqlite3.IntegrityError as exc:

@@ -155,10 +155,11 @@ def assess_line(
     readings = ReadingRepository(database)
     if not posts:
         raise NotFoundError("that line has no test points on it", code=line.code)
+    latest = readings.latest_per_point(line.code, lead)
     assessed: list[PostAssessment] = []
     for post in posts:
         segment = _segment_for(segments, post)
-        reading = readings.latest_for_point(post.code, lead)
+        reading = latest.get(post.code)
         verdict: PointVerdict | None = None
         set_name = ""
         if segment is not None:

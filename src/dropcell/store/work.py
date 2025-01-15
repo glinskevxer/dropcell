@@ -42,12 +42,16 @@ class WorkOrderRepository(Repository[WorkOrder]):
     def to_record(self, row: sqlite3.Row) -> WorkOrder:
         """Rebuild an order from a register row, then attach its findings."""
         code = str(row["code"])
+        return self._build(row, tuple(self.finding_codes(code)))
+
+    def _build(self, row: sqlite3.Row, findings: tuple[str, ...]) -> WorkOrder:
+        code = str(row["code"])
         return WorkOrder(
             code=code,
             line_code=str(row["line_code"]),
             kind=WorkKind(row["kind"]),
             raised_on=dt.date.fromisoformat(str(row["raised_on"])),
-            finding_codes=tuple(self.finding_codes(code)),
+            finding_codes=findings,
             summary=str(row["summary"]),
             state=WorkState(row["state"]),
             planned_for=_date(row["planned_for"]),
@@ -141,22 +145,38 @@ class WorkOrderRepository(Repository[WorkOrder]):
         return self.replace(moved)
 
     def for_line(self, line_code: str, *, open_only: bool = False) -> list[WorkOrder]:
-        """Every order on one line, oldest first."""
+        """Every order on one line, oldest first, in two queries rather than n."""
+        normalised = normalise_code(line_code, kind="line code")
         sql = f"SELECT {WORK_COLUMNS} FROM work_order WHERE line_code = ?"
-        params: list[object] = [normalise_code(line_code, kind="line code")]
+        params: list[object] = [normalised]
         if open_only:
             sql += " AND state NOT IN ('done', 'cancelled')"
         sql += " ORDER BY raised_on, code"
-        return [self.to_record(row) for row in self.database.query(sql, params)]
+        rows = self.database.query(sql, params)
+        links = self._links_on_line(normalised)
+        return [self._build(row, tuple(links.get(str(row["code"]), ()))) for row in rows]
 
     def against(self, finding_code: str) -> list[WorkOrder]:
         """Every order that covers one finding."""
         rows = self.database.query(
-            "SELECT work_order_code FROM work_order_finding WHERE finding_code = ?"
-            " ORDER BY work_order_code",
+            f"SELECT {WORK_COLUMNS} FROM work_order w"
+            " JOIN work_order_finding l ON l.work_order_code = w.code"
+            " WHERE l.finding_code = ? ORDER BY w.code",
             (normalise_code(finding_code, kind="finding code"),),
         )
-        return [self.get(str(row["work_order_code"])) for row in rows]
+        return [self.to_record(row) for row in rows]
+
+    def _links_on_line(self, line_code: str) -> dict[str, list[str]]:
+        rows = self.database.query(
+            "SELECT l.work_order_code AS work_order_code, l.finding_code AS finding_code"
+            " FROM work_order_finding l JOIN work_order w ON w.code = l.work_order_code"
+            " WHERE w.line_code = ? ORDER BY l.finding_code",
+            (line_code,),
+        )
+        found: dict[str, list[str]] = {}
+        for row in rows:
+            found.setdefault(str(row["work_order_code"]), []).append(str(row["finding_code"]))
+        return found
 
     def _link(self, code: str, finding_codes: tuple[str, ...]) -> None:
         if not finding_codes:

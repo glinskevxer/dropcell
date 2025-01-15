@@ -147,6 +147,29 @@ class ReadingRepository:
         sql += " ORDER BY t.station_m, r.taken_on"
         return [row_to_reading(row) for row in self.database.query(sql, params)]
 
+    def latest_per_point(self, line_code: str, lead: LeadKind) -> dict[str, Reading]:
+        """The most recent reading off one lead at every post on a line.
+
+        One query rather than one per post. A line with four hundred posts was
+        costing four hundred round trips to build a report that reads every one
+        of them, and the join here does the same work in a single pass.
+        """
+        rows = self.database.query(
+            "SELECT r.test_point_code AS test_point_code, r.lead AS lead,"
+            " r.taken_on AS taken_on, r.on_mv AS on_mv, r.off_mv AS off_mv,"
+            " r.native_mv AS native_mv, r.electrode AS electrode,"
+            " r.cell_serial AS cell_serial, r.technician AS technician,"
+            " r.comment AS comment"
+            " FROM reading r JOIN test_point t ON t.code = r.test_point_code"
+            " WHERE t.line_code = ? AND r.lead = ?"
+            " AND r.taken_on = ("
+            "   SELECT max(taken_on) FROM reading"
+            "   WHERE test_point_code = r.test_point_code AND lead = r.lead"
+            " )",
+            (normalise_code(line_code, kind="line code"), str(lead)),
+        )
+        return {str(row["test_point_code"]): row_to_reading(row) for row in rows}
+
     def last_read_on(self, code: str, lead: LeadKind) -> dt.date | None:
         """When a lead was last visited, which is what the schedule runs off."""
         latest = self.latest_for_point(code, lead)
