@@ -6,6 +6,14 @@ so a second process fails instantly instead of waiting. None of those defaults
 suit a register that a field crew syncs into from a laptop in a van, so the
 connection is opened once, here, with all of them set.
 
+Durability is set to NORMAL rather than FULL, and only because the journal is
+in write ahead log mode. In that pairing a transaction survives the process
+being killed and every kind of crash short of the machine losing power, and the
+worst a power cut can do is lose the last few commits rather than corrupt
+anything. FULL fsyncs on every commit, which on an import of forty thousand
+readings is the whole of the runtime, and it buys protection against a laptop
+losing power in the seconds after somebody typed a command.
+
 Errors are translated on the way out. A caller trying to insert a second test
 point with the same code should catch ``ConflictError`` and print something
 useful, not catch ``sqlite3.IntegrityError`` and have to read the message text
@@ -24,6 +32,8 @@ from typing import Any
 from dropcell.errors import ConflictError, StoreError
 
 BUSY_TIMEOUT_MS = 5000
+CACHE_KB = 16_000
+SYNCHRONOUS = "NORMAL"
 
 
 def connect(path: Path | str) -> sqlite3.Connection:
@@ -36,9 +46,11 @@ def connect(path: Path | str) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
-    if target != ":memory:":
-        connection.execute("PRAGMA journal_mode = WAL")
-    connection.execute("PRAGMA synchronous = FULL")
+    if target == ":memory:":
+        return connection
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute(f"PRAGMA synchronous = {SYNCHRONOUS};")
+    connection.execute(f"PRAGMA cache_size = -{CACHE_KB}")
     return connection
 
 

@@ -25,6 +25,36 @@ def test_a_file_backed_register_runs_in_write_ahead_log_mode(tmp_path: Path) -> 
     assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 
+def test_a_file_backed_register_pairs_that_with_normal_durability(
+    tmp_path: Path,
+) -> None:
+    connection = connect(tmp_path / "cp.sqlite")
+    assert connection.execute("PRAGMA synchronous").fetchone()[0] == 1
+
+
+def test_an_in_memory_register_needs_neither(tmp_path: Path) -> None:
+    connection = connect(":memory:")
+    assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "memory"
+
+
+def test_a_file_backed_register_is_given_a_working_cache(tmp_path: Path) -> None:
+    connection = connect(tmp_path / "cp.sqlite")
+    assert connection.execute("PRAGMA cache_size").fetchone()[0] < 0
+
+
+def test_a_transaction_still_survives_the_process_being_killed(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "cp.sqlite"
+    first = connect(target)
+    first.execute("CREATE TABLE t (n INTEGER)")
+    with transaction(first):
+        first.execute("INSERT INTO t VALUES (1)")
+    first.close()
+    second = connect(target)
+    assert second.execute("SELECT count(*) FROM t").fetchone()[0] == 1
+
+
 def test_rows_come_back_addressable_by_column_name(db: Database) -> None:
     db.execute("INSERT INTO post VALUES ('TP-114', 1245.5)")
     row = db.query_one("SELECT code, station FROM post")
