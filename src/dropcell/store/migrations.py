@@ -368,6 +368,32 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX work_order_finding_by_finding ON work_order_finding (finding_code)",
         ),
     ),
+    Migration(
+        version=9,
+        name="soil soundings",
+        statements=(
+            """
+            CREATE TABLE sounding (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                line_code      TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                station_m      REAL NOT NULL,
+                measured_on    TEXT NOT NULL,
+                technician     TEXT NOT NULL DEFAULT '',
+                remark         TEXT NOT NULL DEFAULT '',
+                UNIQUE (line_code, station_m, measured_on)
+            )
+            """,
+            """
+            CREATE TABLE sounding_reading (
+                sounding_id    INTEGER NOT NULL REFERENCES sounding(id) ON DELETE CASCADE,
+                spacing_m      REAL NOT NULL CHECK (spacing_m > 0),
+                resistance_ohm REAL NOT NULL CHECK (resistance_ohm > 0),
+                PRIMARY KEY (sounding_id, spacing_m)
+            )
+            """,
+            "CREATE INDEX sounding_by_line ON sounding (line_code, station_m)",
+        ),
+    ),
 )
 
 
