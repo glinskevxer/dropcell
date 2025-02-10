@@ -23,12 +23,14 @@ from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
 from dropcell.findings.raise_from import from_cis_sections
 from dropcell.ingest.cis import import_cis
 from dropcell.ingest.dcvg import import_dcvg
+from dropcell.ingest.soil import import_soil
 from dropcell.report.dig import DigItem, render_dig_sheet
 from dropcell.report.table import Column, Table
 from dropcell.stationing import Convention
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
 from dropcell.store.segments import SegmentRepository
+from dropcell.store.soundings import SoundingRepository
 from dropcell.survey.cis import CisSurvey
 from dropcell.survey.sections import find_under_criterion, total_under_criterion_m
 from dropcell.survey.spikes import find_spikes, without_spikes
@@ -258,3 +260,55 @@ def analyse_dcvg(
             budget=chosen_budget,
         )
     )
+
+
+SOUNDING_COLUMNS = (
+    Column("at", "Station", align="right"),
+    Column("date", "Measured"),
+    Column("spacings", "Spacings", align="right"),
+    Column("shallow", "0 to 1 m", align="right", format=".1f"),
+    Column("pipe", "At cover", align="right", format=".1f"),
+    Column("band", "Band"),
+)
+
+
+@survey_group.command("soil")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--line", "line_code", required=True)
+@click.option("--depth", default="1.2 m", show_default=True, help="Depth of cover to read at.")
+@pass_context
+@handled
+def import_soil_command(context: Context, path: Path, line_code: str, depth: str) -> None:
+    """Load a four pin sounding file and say what the ground is like."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    loaded = import_soil(
+        database,
+        path.read_text(encoding="utf-8"),
+        line_code=line.code,
+        now=dt.datetime.combine(context.today, dt.time(12, 0)),
+        source=path.name,
+        convention=line.convention,
+    )
+    click.echo(f"{loaded.stored} soundings stored from {path.name}")
+    if loaded.quarantined:
+        click.echo(f"{loaded.quarantined} rows could not be read")
+    for reason in loaded.reasons():
+        click.echo(f"  {reason}")
+    click.echo("")
+    at_depth = parse_length_m(depth)
+    table = Table(
+        columns=SOUNDING_COLUMNS,
+        title=f"Soundings, {line.code}",
+        empty_note="no soundings on this line",
+    )
+    for sounding in SoundingRepository(database).for_line(line.code):
+        table.add(
+            at=sounding.station.format(line.convention),
+            date=sounding.measured_on.isoformat(),
+            spacings=len(sounding.readings),
+            shallow=sounding.layers[0].resistivity_ohm_m,
+            pipe=sounding.at_depth(at_depth),
+            band=sounding.corrosivity_at(at_depth),
+        )
+    click.echo(table.render())
