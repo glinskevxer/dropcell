@@ -15,6 +15,7 @@ from dropcell.analysis.schedule import line_histories
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import LeadKind
+from dropcell.report.annual import AnnualReport
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
 from dropcell.report.export import findings_csv, readings_csv
@@ -24,6 +25,7 @@ from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
 from dropcell.schedule.register import build_register
 from dropcell.store.findings import FindingRepository
+from dropcell.store.imports import ImportLedger
 from dropcell.store.lines import LineRepository
 from dropcell.store.readings import ReadingRepository
 from dropcell.store.segments import SegmentRepository
@@ -273,3 +275,33 @@ def trend_report(context: Context, line_code: str, horizon: float, only_drifting
     click.echo(
         f"{len(soon)} of {len(trends)} fitted posts reach criterion inside {horizon:.0f} years"
     )
+
+
+@report_group.command("annual")
+@click.option("--line", "line_code", required=True)
+@click.option("--year", type=int, default=None, help="Defaults to the year before this one.")
+@click.option("--by", "prepared_by", default="", help="Who prepared it.")
+@pass_context
+@handled
+def annual_report(context: Context, line_code: str, year: int | None, prepared_by: str) -> None:
+    """The year's record, for the file rather than for this morning."""
+    import datetime as dt
+
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    reported = year if year is not None else context.today.year - 1
+    year_end = dt.date(reported, 12, 31)
+    as_of = min(year_end, context.today)
+    assessment = assess_line(database, line.code, as_of=as_of)
+    register = build_register(STANDARD_POLICY, line_histories(database, line.code), as_of=as_of)
+    report = AnnualReport(
+        year=reported,
+        assessment=assessment,
+        register=tuple(register),
+        findings=tuple(FindingRepository(database).for_line(line.code)),
+        imports=tuple(ImportLedger(database).recent(limit=500)),
+        settings=context.settings,
+        prepared_on=context.today,
+        prepared_by=prepared_by or context.settings.operator,
+    )
+    click.echo(report.render())
