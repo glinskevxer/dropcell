@@ -18,7 +18,8 @@ import datetime as dt
 
 import click
 
-from dropcell.analysis.groundbed import assess_bed
+from dropcell.analysis.groundbed import assess_bed, beds_due_within, rank_beds
+from dropcell.analysis.rectifier import assess_unit, urgent_first
 from dropcell.cli.common import line_at
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import AnodeMaterial, GroundbedKind
@@ -236,3 +237,99 @@ def _mass_kg(text: str) -> float:
         return float(cleaned)
     except ValueError as exc:
         raise UnitError("cannot read a mass from this", text=text) from exc
+
+
+FAULT_COLUMNS = (
+    Column("tag", "Unit"),
+    Column("checks", "Checks", align="right"),
+    Column("last", "Last check"),
+    Column("faults", "Found", width=44),
+)
+
+BED_COLUMNS = (
+    Column("code", "Bed"),
+    Column("material", "Material", width=18),
+    Column("installed", "Installed"),
+    Column("passed", "Amp years", align="right", format=".1f"),
+    Column("spent", "Spent", align="right", format=".0%"),
+    Column("left", "Years left", align="right", format=".1f"),
+    Column("end", "Runs out"),
+)
+
+
+@rectifier_group.command("faults")
+@click.option("--line", "line_code", required=True)
+@click.option("--window", type=int, default=6, show_default=True, help="Checks to read.")
+@click.option("--all", "show_all", is_flag=True, help="Healthy units as well.")
+@pass_context
+@handled
+def rectifier_faults(context: Context, line_code: str, window: int, show_all: bool) -> None:
+    """Read each unit's recent history rather than its last check sheet."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    units = RectifierRepository(database).for_line(line.code)
+    checks = RectifierCheckRepository(database)
+    assessments = [
+        assess_unit(unit, checks.for_unit(unit.tag), window=window) for unit in units
+    ]
+    table = Table(columns=FAULT_COLUMNS, empty_note="no rectifiers on this line")
+    for assessment in urgent_first(assessments):
+        if assessment.healthy and not show_all:
+            continue
+        table.add(
+            tag=assessment.tag,
+            checks=assessment.checks,
+            last=(assessment.latest.checked_on.isoformat() if assessment.latest else "never"),
+            faults=", ".join(str(fault) for fault in assessment.faults) or "nothing found",
+        )
+    click.echo(table.render())
+    for assessment in urgent_first(assessments):
+        for note in assessment.notes:
+            click.echo(f"  {assessment.tag}: {note}")
+    urgent = [item for item in assessments if item.urgent]
+    click.echo("")
+    click.echo(f"{len(urgent)} of {len(assessments)} units need somebody soon")
+
+
+@rectifier_group.command("beds")
+@click.option("--line", "line_code", required=True)
+@click.option(
+    "--horizon", type=float, default=5.0, show_default=True, help="Years to plan over."
+)
+@pass_context
+@handled
+def groundbed_report(context: Context, line_code: str, horizon: float) -> None:
+    """How much is left of each bed on a line."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    units = RectifierRepository(database).for_line(line.code)
+    checks = RectifierCheckRepository(database)
+    beds = GroundbedRepository(database)
+    statuses = []
+    seen: set[str] = set()
+    materials: dict[str, str] = {}
+    installed: dict[str, str] = {}
+    for unit in units:
+        if unit.groundbed_code in seen:
+            continue
+        seen.add(unit.groundbed_code)
+        bed = beds.get(unit.groundbed_code)
+        materials[bed.code] = str(bed.material)
+        installed[bed.code] = bed.installed_on.isoformat()
+        statuses.append(assess_bed(bed, checks.for_unit(unit.tag), as_of=context.today))
+    table = Table(columns=BED_COLUMNS, empty_note="no groundbeds on this line")
+    for status in rank_beds(statuses):
+        end = status.projected_end
+        table.add(
+            code=status.groundbed_code,
+            material=materials[status.groundbed_code],
+            installed=installed[status.groundbed_code],
+            passed=status.amp_years,
+            spent=status.spent_fraction,
+            left=status.remaining_life_years,
+            end=end.isoformat() if end else "unknown, unit is off",
+        )
+    click.echo(table.render())
+    due = beds_due_within(statuses, horizon)
+    click.echo("")
+    click.echo(f"{len(due)} of {len(statuses)} beds run out inside {horizon:.0f} years")
