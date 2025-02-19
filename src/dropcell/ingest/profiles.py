@@ -160,6 +160,43 @@ SOIL_PROFILE = MappingProfile(
     ),
 )
 
+COUPON_PROFILE = MappingProfile(
+    name="coupon",
+    description="coupon readings, one row per visit",
+    columns=(
+        ColumnMapping("coupon_code", FieldType.TEXT, ("Coupon", "Coupon ID", "CP")),
+        ColumnMapping("taken_on", FieldType.DATE, ("Date", "Read Date")),
+        ColumnMapping("on_mv", FieldType.POTENTIAL, ("On", "Connected", "P/S On")),
+        ColumnMapping(
+            "disconnected_mv",
+            FieldType.POTENTIAL,
+            ("Disconnected", "Off", "IR Free", "Instant Off"),
+            required=False,
+        ),
+        ColumnMapping(
+            "dc_shunt_mv",
+            FieldType.POTENTIAL,
+            ("DC Shunt", "Shunt DC", "DC mV"),
+            required=False,
+        ),
+        ColumnMapping(
+            "ac_shunt_mv",
+            FieldType.POTENTIAL,
+            ("AC Shunt", "Shunt AC", "AC mV"),
+            required=False,
+        ),
+        ColumnMapping(
+            "ac_voltage_v", FieldType.VOLTAGE, ("AC Volts", "VAC", "AC"), required=False
+        ),
+        ColumnMapping(
+            "technician", FieldType.TEXT, ("Technician", "Tech", "By"), required=False
+        ),
+        ColumnMapping(
+            "comment", FieldType.TEXT, ("Comment", "Remark", "Note"), required=False, default=""
+        ),
+    ),
+)
+
 PROFILES: dict[str, MappingProfile] = {
     profile.name: profile
     for profile in (
@@ -168,6 +205,7 @@ PROFILES: dict[str, MappingProfile] = {
         RECTIFIER_PROFILE,
         DCVG_PROFILE,
         SOIL_PROFILE,
+        COUPON_PROFILE,
     )
 }
 
