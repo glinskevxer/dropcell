@@ -394,6 +394,61 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX sounding_by_line ON sounding (line_code, station_m)",
         ),
     ),
+    Migration(
+        version=10,
+        name="interference test history",
+        statements=(
+            """
+            CREATE TABLE casing_test (
+                casing_code   TEXT NOT NULL REFERENCES casing(code) ON DELETE CASCADE,
+                tested_on     TEXT NOT NULL,
+                pipe_on_mv    REAL NOT NULL,
+                casing_on_mv  REAL NOT NULL,
+                pipe_off_mv   REAL,
+                casing_off_mv REAL,
+                remark        TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (casing_code, tested_on)
+            )
+            """,
+            """
+            CREATE TABLE swing_test (
+                crossing_code             TEXT NOT NULL
+                                          REFERENCES crossing(code) ON DELETE CASCADE,
+                tested_on                 TEXT NOT NULL,
+                foreign_with_ours_on_mv   REAL NOT NULL,
+                foreign_with_ours_off_mv  REAL NOT NULL,
+                ours_on_mv                REAL,
+                ours_off_mv               REAL,
+                their_rectifier_interrupted INTEGER NOT NULL DEFAULT 0,
+                remark                    TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (crossing_code, tested_on)
+            )
+            """,
+            """
+            CREATE TABLE bond_check (
+                bond_code         TEXT NOT NULL REFERENCES bond(code) ON DELETE CASCADE,
+                checked_on        TEXT NOT NULL,
+                current_a         REAL NOT NULL,
+                reversed_polarity INTEGER NOT NULL DEFAULT 0,
+                remark            TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (bond_code, checked_on)
+            )
+            """,
+            """
+            CREATE TABLE isolation_test (
+                joint_code              TEXT NOT NULL
+                                        REFERENCES isolation_joint(code) ON DELETE CASCADE,
+                tested_on               TEXT NOT NULL,
+                our_side_mv             REAL NOT NULL,
+                other_side_mv           REAL NOT NULL,
+                surge_protector_removed INTEGER NOT NULL DEFAULT 0,
+                technician              TEXT NOT NULL DEFAULT '',
+                remark                  TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (joint_code, tested_on)
+            )
+            """,
+        ),
+    ),
 )
 
 
