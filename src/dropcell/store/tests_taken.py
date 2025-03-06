@@ -20,8 +20,8 @@ from dropcell.interference.bonds import BondCheck
 from dropcell.interference.casing import CasingTest
 from dropcell.interference.foreign import SwingTest
 from dropcell.interference.isolation import IsolationTest
+from dropcell.model.casing import Casing
 from dropcell.model.ids import normalise_code
-from dropcell.stationing import Station
 from dropcell.store.database import Database
 
 
@@ -52,21 +52,28 @@ class TestHistory:
         )
         return test
 
-    def casing_tests(self, code: str, *, line_code: str = "", station: Station | None = None):  # type: ignore[no-untyped-def]
-        """Every test on one casing, oldest first."""
+    def casing_tests(self, casing: Casing) -> list[CasingTest]:
+        """Every test on one casing, oldest first.
+
+        The casing record is taken rather than its code because a test carries
+        where it was taken, and the only place that is known is the casing. An
+        earlier version defaulted the line and the station when they were not
+        supplied, which produced tests claiming to be on a line called AL-0 at
+        station zero, and those went straight into a report.
+        """
         rows = self.database.query(
             "SELECT casing_code, tested_on, pipe_on_mv, casing_on_mv, pipe_off_mv,"
             " casing_off_mv, remark FROM casing_test WHERE casing_code = ?"
             " ORDER BY tested_on",
-            (normalise_code(code, kind="casing code"),),
+            (casing.code,),
         )
-        return [self._casing(row, line_code, station) for row in rows]
+        return [self._casing(row, casing) for row in rows]
 
-    def _casing(self, row: sqlite3.Row, line_code: str, station: Station | None) -> CasingTest:
+    def _casing(self, row: sqlite3.Row, casing: Casing) -> CasingTest:
         return CasingTest(
             casing_code=str(row["casing_code"]),
-            line_code=line_code or "AL-0",
-            station=station or Station(0.0),
+            line_code=casing.line_code,
+            station=casing.station,
             tested_on=dt.date.fromisoformat(str(row["tested_on"])),
             pipe_on_mv=float(row["pipe_on_mv"]),
             casing_on_mv=float(row["casing_on_mv"]),

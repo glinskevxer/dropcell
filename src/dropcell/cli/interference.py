@@ -5,9 +5,10 @@ tested the same way, so the commands look alike on purpose. What differs is the
 reading each test takes and what a bad answer means, and that is in the verdict
 line each command prints rather than in the shape of the command.
 
-The tests print their verdict rather than storing it. A verdict is derived from
-readings and thresholds, and storing it would freeze a judgement made under
-whatever thresholds were current that afternoon.
+The tests store their readings and print their verdict. A verdict is derived
+from readings and thresholds, and storing one would freeze a judgement made
+under whatever thresholds were current that afternoon; the readings it came
+from are evidence and are kept.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from dropcell.interference.isolation import (
 )
 from dropcell.model.casing import Casing
 from dropcell.report.table import Column, Table
+from dropcell.store.database import Database
 from dropcell.store.interference import (
     BondRepository,
     CasingRepository,
@@ -36,6 +38,7 @@ from dropcell.store.interference import (
     IsolationJointRepository,
 )
 from dropcell.store.lines import LineRepository
+from dropcell.store.tests_taken import TestHistory
 from dropcell.units import parse_current_a, parse_length_m, parse_potential_mv
 
 PLANT_COLUMNS = (
@@ -226,6 +229,7 @@ def test_casing(
         pipe_off_mv=None if pipe_off is None else parse_potential_mv(pipe_off),
         casing_off_mv=None if casing_off is None else parse_potential_mv(casing_off),
     )
+    TestHistory(database).add_casing_test(test)
     verdict = classify_casing(test)
     click.echo(f"{verdict.casing_code}: {verdict.status}")
     click.echo(f"  {verdict.separation_mv:.0f} mV between pipe and casing")
@@ -260,6 +264,7 @@ def test_crossing(
         foreign_with_ours_off_mv=parse_potential_mv(foreign_off),
         their_rectifier_interrupted=theirs_interrupted,
     )
+    TestHistory(database).add_swing_test(test)
     verdict = classify_swing(test)
     click.echo(f"{verdict.crossing_code}: {verdict.verdict}")
     click.echo(f"  {verdict.foreign_swing_mv:+.0f} mV swing on their structure")
@@ -292,6 +297,7 @@ def test_bond(
         current_a=parse_current_a(current),
         reversed_polarity=reversed_polarity,
     )
+    TestHistory(database).add_bond_check(check)
     health = assess_bond(bond, check)
     click.echo(f"{bond.code}: {health}")
     click.echo(f"  {check.current_a:.3f} A against a design of {bond.design_current_a:.3f} A")
@@ -323,6 +329,7 @@ def test_joint(
         other_side_mv=parse_potential_mv(other_side),
         surge_protector_removed=protector_lifted,
     )
+    TestHistory(database).add_isolation_test(test)
     verdict = classify_isolation(test, joint)
     click.echo(f"{joint.code}: {verdict.status}")
     click.echo(f"  {verdict.separation_mv:.0f} mV between the two sides")
@@ -369,3 +376,86 @@ def list_plant(context: Context, line_code: str) -> None:
             note=str(joint.kind),
         )
     click.echo(table.render())
+
+
+HISTORY_COLUMNS = (
+    Column("date", "Date"),
+    Column("reading", "Reading", width=30),
+    Column("verdict", "Verdict", width=20),
+    Column("note", "Note", width=40),
+)
+
+
+@plant_group.command("history")
+@click.argument("code")
+@click.option(
+    "--kind",
+    type=click.Choice(["casing", "crossing", "bond", "joint"]),
+    required=True,
+    help="What sort of thing the code names.",
+)
+@pass_context
+@handled
+def plant_history(context: Context, code: str, kind: str) -> None:
+    """Show every test ever taken on one piece of plant."""
+    database = context.database()
+    history = TestHistory(database)
+    table = Table(columns=HISTORY_COLUMNS, empty_note="never tested")
+    if kind == "casing":
+        _casing_history(database, history, code, table)
+    elif kind == "crossing":
+        _crossing_history(database, history, code, table)
+    elif kind == "bond":
+        _bond_history(database, history, code, table)
+    else:
+        _joint_history(database, history, code, table)
+    click.echo(table.render())
+
+
+def _casing_history(database: Database, history: TestHistory, code: str, table: Table) -> None:
+    casing = CasingRepository(database).get(code)
+    for test in history.casing_tests(casing):
+        verdict = classify_casing(test)
+        table.add(
+            date=test.tested_on.isoformat(),
+            reading=f"{test.separation_mv:.0f} mV apart",
+            verdict=str(verdict.status),
+            note=verdict.reason,
+        )
+
+
+def _crossing_history(
+    database: Database, history: TestHistory, code: str, table: Table
+) -> None:
+    crossing = CrossingRepository(database).get(code)
+    for test in history.swing_tests(crossing.code):
+        verdict = classify_swing(test)
+        table.add(
+            date=test.tested_on.isoformat(),
+            reading=f"{test.foreign_swing_mv:+.0f} mV swing",
+            verdict=str(verdict.verdict),
+            note=verdict.reason,
+        )
+
+
+def _bond_history(database: Database, history: TestHistory, code: str, table: Table) -> None:
+    bond = BondRepository(database).get(code)
+    for check in history.bond_checks(bond.code):
+        table.add(
+            date=check.checked_on.isoformat(),
+            reading=f"{check.current_a:.3f} A",
+            verdict=str(assess_bond(bond, check)),
+            note="reversed" if check.reversed_polarity else "",
+        )
+
+
+def _joint_history(database: Database, history: TestHistory, code: str, table: Table) -> None:
+    joint = IsolationJointRepository(database).get(code)
+    for test in history.isolation_tests(joint.code):
+        verdict = classify_isolation(test, joint)
+        table.add(
+            date=test.tested_on.isoformat(),
+            reading=f"{test.separation_mv:.0f} mV apart",
+            verdict=str(verdict.status),
+            note=verdict.reason,
+        )

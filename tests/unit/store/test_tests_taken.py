@@ -85,7 +85,7 @@ def casing_test(**overrides: object) -> CasingTest:
 def test_a_casing_test_survives_a_round_trip(register: Database) -> None:
     history = TestHistory(register)
     history.add_casing_test(casing_test(pipe_off_mv=-905.0, casing_off_mv=-540.0))
-    stored = history.casing_tests("CS-12", line_code="AL-2", station=Station(1245.5))
+    stored = history.casing_tests(CasingRepository(register).get("CS-12"))
     assert len(stored) == 1
     assert stored[0].pipe_off_mv == pytest.approx(-905.0)
     assert stored[0].separation_mv == pytest.approx(365.0)
@@ -107,7 +107,8 @@ def test_casing_tests_come_back_oldest_first(register: Database) -> None:
     history = TestHistory(register)
     history.add_casing_test(casing_test())
     history.add_casing_test(casing_test(tested_on=dt.date(2023, 3, 14)))
-    dates = [item.tested_on for item in history.casing_tests("CS-12")]
+    casing = CasingRepository(register).get("CS-12")
+    dates = [item.tested_on for item in history.casing_tests(casing)]
     assert dates == sorted(dates)
 
 
@@ -174,6 +175,7 @@ def test_deleting_a_line_takes_every_test_with_it(register: Database) -> None:
     history = TestHistory(register)
     history.add_casing_test(casing_test())
     history.add_bond_check(BondCheck(bond_code="BD-7", checked_on=TESTED, current_a=1.9))
+    casing = CasingRepository(register).get("CS-12")
     LineRepository(register).delete("AL-2")
-    assert history.casing_tests("CS-12") == []
+    assert history.casing_tests(casing) == []
     assert history.bond_checks("BD-7") == []
