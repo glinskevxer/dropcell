@@ -204,3 +204,23 @@ class TestHistory:
             (code,),
         )
         return [dt.date.fromisoformat(str(row["when_on"])) for row in rows]
+
+    def latest_casing_test(self, casing: Casing) -> CasingTest | None:
+        """The most recent test on one casing."""
+        found = self.casing_tests(casing)
+        return found[-1] if found else None
+
+    def latest_swing_test(self, code: str) -> SwingTest | None:
+        """The most recent swing test at one crossing."""
+        found = self.swing_tests(code)
+        return found[-1] if found else None
+
+    def latest_bond_check(self, code: str) -> BondCheck | None:
+        """The most recent check on one bond."""
+        found = self.bond_checks(code)
+        return found[-1] if found else None
+
+    def latest_isolation_test(self, code: str) -> IsolationTest | None:
+        """The most recent test on one joint."""
+        found = self.isolation_tests(code)
+        return found[-1] if found else None

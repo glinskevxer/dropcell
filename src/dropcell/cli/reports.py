@@ -19,6 +19,14 @@ from dropcell.report.annual import AnnualReport
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
 from dropcell.report.export import findings_csv, readings_csv
+from dropcell.report.interference import (
+    PlantRow,
+    bond_row,
+    casing_row,
+    crossing_row,
+    joint_row,
+    render_interference,
+)
 from dropcell.report.kpi import build_kpis
 from dropcell.report.protection import render_protection
 from dropcell.report.table import Column, Table
@@ -26,10 +34,17 @@ from dropcell.schedule.policy import STANDARD_POLICY
 from dropcell.schedule.register import build_register
 from dropcell.store.findings import FindingRepository
 from dropcell.store.imports import ImportLedger
+from dropcell.store.interference import (
+    BondRepository,
+    CasingRepository,
+    CrossingRepository,
+    IsolationJointRepository,
+)
 from dropcell.store.lines import LineRepository
 from dropcell.store.readings import ReadingRepository
 from dropcell.store.segments import SegmentRepository
 from dropcell.store.testpoints import TestPointRepository
+from dropcell.store.tests_taken import TestHistory
 from dropcell.units import parse_length_m
 
 GAP_COLUMNS = (
@@ -305,3 +320,31 @@ def annual_report(context: Context, line_code: str, year: int | None, prepared_b
         prepared_by=prepared_by or context.settings.operator,
     )
     click.echo(report.render())
+
+
+@report_group.command("interference")
+@click.option("--line", "line_code", required=True)
+@pass_context
+@handled
+def interference_report(context: Context, line_code: str) -> None:
+    """Casings, crossings, bonds and joints, with what their last test said."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    history = TestHistory(database)
+    rows: list[PlantRow] = []
+    for casing in CasingRepository(database).for_line(line.code):
+        rows.append(casing_row(casing, history.latest_casing_test(casing)))
+    for crossing in CrossingRepository(database).for_line(line.code):
+        rows.append(
+            crossing_row(
+                crossing.code,
+                crossing.station,
+                crossing.foreign_operator,
+                history.latest_swing_test(crossing.code),
+            )
+        )
+    for bond in BondRepository(database).for_line(line.code):
+        rows.append(bond_row(bond, history.latest_bond_check(bond.code)))
+    for joint in IsolationJointRepository(database).for_line(line.code):
+        rows.append(joint_row(joint, history.latest_isolation_test(joint.code)))
+    click.echo(render_interference(line, rows, as_of=context.today))
