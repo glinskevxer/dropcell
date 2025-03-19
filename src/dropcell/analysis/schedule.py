@@ -13,6 +13,16 @@ programme drift onto the wrong wire.
 A post installed last month is not overdue. Its in service date is what the
 interval runs from, and without that every new post on the line appears on the
 overdue list the day it is added.
+
+Casings, bonds and isolating joints are on the register too, and leaving them
+off it was the mistake this module was written to stop repeating. A programme
+that schedules its posts and its rectifiers and lets the crossings go for six
+years is compliant on every figure it prints and blind at the four places where
+the pipe is most likely to be unprotected.
+
+A bond appears under one of two rules depending on whether losing it loses the
+protection behind it. That is a decision recorded when the bond went in, and it
+is read off the record rather than guessed at here.
 """
 
 from __future__ import annotations
@@ -21,9 +31,15 @@ from dropcell.model.enums import LeadKind
 from dropcell.schedule.policy import AssetKind
 from dropcell.schedule.register import AssetHistory
 from dropcell.store.database import Database
+from dropcell.store.interference import (
+    BondRepository,
+    CasingRepository,
+    IsolationJointRepository,
+)
 from dropcell.store.readings import ReadingRepository
 from dropcell.store.rectifiers import RectifierCheckRepository, RectifierRepository
 from dropcell.store.testpoints import TestPointRepository
+from dropcell.store.tests_taken import TestHistory
 
 
 def post_histories(
@@ -66,6 +82,48 @@ def rectifier_histories(database: Database, line_code: str) -> list[AssetHistory
     ]
 
 
+def casing_histories(database: Database, line_code: str) -> list[AssetHistory]:
+    """One history per cased crossing, from its tests."""
+    history = TestHistory(database)
+    return [
+        AssetHistory(
+            code=casing.code,
+            kind=AssetKind.CASING,
+            visits=tuple(test.tested_on for test in history.casing_tests(casing)),
+            in_service_from=casing.installed_on,
+        )
+        for casing in CasingRepository(database).for_line(line_code)
+    ]
+
+
+def bond_histories(database: Database, line_code: str) -> list[AssetHistory]:
+    """One history per bond, under whichever rule its record says applies."""
+    history = TestHistory(database)
+    return [
+        AssetHistory(
+            code=bond.code,
+            kind=AssetKind.CRITICAL_BOND if bond.critical else AssetKind.ORDINARY_BOND,
+            visits=tuple(check.checked_on for check in history.bond_checks(bond.code)),
+            in_service_from=bond.installed_on,
+        )
+        for bond in BondRepository(database).for_line(line_code)
+    ]
+
+
+def joint_histories(database: Database, line_code: str) -> list[AssetHistory]:
+    """One history per isolating joint, from its tests."""
+    history = TestHistory(database)
+    return [
+        AssetHistory(
+            code=joint.code,
+            kind=AssetKind.ISOLATION_JOINT,
+            visits=tuple(test.tested_on for test in history.isolation_tests(joint.code)),
+            in_service_from=joint.installed_on,
+        )
+        for joint in IsolationJointRepository(database).for_line(line_code)
+    ]
+
+
 def line_histories(
     database: Database,
     line_code: str,
@@ -76,4 +134,7 @@ def line_histories(
     return [
         *post_histories(database, line_code, lead=lead),
         *rectifier_histories(database, line_code),
+        *casing_histories(database, line_code),
+        *bond_histories(database, line_code),
+        *joint_histories(database, line_code),
     ]
