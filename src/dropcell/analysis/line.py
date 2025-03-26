@@ -22,9 +22,10 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
+from dropcell.config import Settings
 from dropcell.criteria.base import Evidence
+from dropcell.criteria.build import select_for
 from dropcell.criteria.evaluate import PointVerdict
-from dropcell.criteria.registry import select_set
 from dropcell.errors import NotFoundError
 from dropcell.model.enums import LeadKind
 from dropcell.model.line import Line
@@ -147,8 +148,15 @@ def assess_line(
     *,
     as_of: dt.date,
     lead: LeadKind = LeadKind.PIPE,
+    settings: Settings | None = None,
 ) -> LineAssessment:
-    """Walk one line's posts and judge each on its most recent reading."""
+    """Walk one line's posts and judge each on its most recent reading.
+
+    The settings decide the thresholds and nothing else. Passing none means the
+    figures in the standards, which is what every report did before an operator
+    could move them, so the default is the old behaviour rather than a new one.
+    """
+    figures = settings or Settings()
     line = LineRepository(database).get(line_code)
     segments = SegmentRepository(database).for_line(line.code)
     posts = TestPointRepository(database).for_line(line.code)
@@ -163,7 +171,7 @@ def assess_line(
         verdict: PointVerdict | None = None
         set_name = ""
         if segment is not None:
-            selection = select_set(segment)
+            selection = select_for(segment, figures)
             set_name = selection.name
             if reading is not None:
                 evidence = Evidence(

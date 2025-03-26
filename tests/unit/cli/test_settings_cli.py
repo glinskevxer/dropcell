@@ -193,3 +193,18 @@ def test_the_register_option_beats_the_settings_file(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert chosen.exists()
     assert not settings_target.exists()
+
+
+def test_the_criterion_from_the_settings_reaches_the_protection_report(
+    run_with: Callable[..., Result],
+) -> None:
+    run_with(*ADD_LINE)
+    run_with(*ADD_SEGMENT)
+    run_with(
+        "post", "add", "TP-1", "--line", "AL-2", "--at", "10+00.00", "--installed", "1998-05-04"
+    )
+    run_with("post", "read", "TP-1", "--on", "-1120", "--off", "-905")
+    tight = run_with("report", "protection", "--line", "AL-2")
+    assert "protection rate 0.0%" in tight.output
+    loose = run_with("report", "protection", "--line", "AL-2", config=None)
+    assert "protection rate 100.0%" in loose.output

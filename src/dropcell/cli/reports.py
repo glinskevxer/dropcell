@@ -67,7 +67,9 @@ def report_group() -> None:
 @handled
 def protection_report(context: Context, line_code: str) -> None:
     """How the posts on one line read."""
-    assessment = assess_line(context.database(), line_code, as_of=context.today)
+    assessment = assess_line(
+        context.database(), line_code, as_of=context.today, settings=context.settings
+    )
     click.echo(render_protection(assessment))
 
 
@@ -229,7 +231,9 @@ def kpi_report(context: Context, line_code: str) -> None:
     """One line's programme on one page."""
     database = context.database()
     line = LineRepository(database).get(line_code)
-    assessment = assess_line(database, line.code, as_of=context.today)
+    assessment = assess_line(
+        database, line.code, as_of=context.today, settings=context.settings
+    )
     segments = SegmentRepository(database).for_line(line.code)
     posts = TestPointRepository(database).for_line(line.code)
     register = build_register(
@@ -307,7 +311,7 @@ def annual_report(context: Context, line_code: str, year: int | None, prepared_b
     reported = year if year is not None else context.today.year - 1
     year_end = dt.date(reported, 12, 31)
     as_of = min(year_end, context.today)
-    assessment = assess_line(database, line.code, as_of=as_of)
+    assessment = assess_line(database, line.code, as_of=as_of, settings=context.settings)
     register = build_register(STANDARD_POLICY, line_histories(database, line.code), as_of=as_of)
     report = AnnualReport(
         year=reported,
