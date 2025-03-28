@@ -449,6 +449,35 @@ MIGRATIONS: tuple[Migration, ...] = (
             """,
         ),
     ),
+    Migration(
+        version=11,
+        name="depolarisation surveys",
+        statements=(
+            """
+            CREATE TABLE depolarisation (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                line_code        TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                switched_off_at  TEXT NOT NULL,
+                read_back_at     TEXT NOT NULL,
+                technician       TEXT NOT NULL DEFAULT '',
+                UNIQUE (line_code, switched_off_at)
+            )
+            """,
+            """
+            CREATE TABLE depolarisation_point (
+                survey_id       INTEGER NOT NULL
+                                REFERENCES depolarisation(id) ON DELETE CASCADE,
+                test_point_code TEXT NOT NULL,
+                off_mv          REAL NOT NULL,
+                depolarised_mv  REAL,
+                remark          TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (survey_id, test_point_code)
+            )
+            """,
+            "CREATE INDEX depolarisation_by_line ON depolarisation"
+            " (line_code, switched_off_at)",
+        ),
+    ),
 )
 
 
