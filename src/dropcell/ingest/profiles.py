@@ -197,6 +197,26 @@ COUPON_PROFILE = MappingProfile(
     ),
 )
 
+DEPOLARISATION_PROFILE = MappingProfile(
+    name="depolarisation",
+    description="depolarisation survey, one row per post read either side of the drift",
+    columns=(
+        ColumnMapping(
+            "test_point_code", FieldType.TEXT, ("Test Post", "TP", "Post", "Test Point")
+        ),
+        ColumnMapping("off_mv", FieldType.POTENTIAL, ("Off", "Instant Off", "P/S Off")),
+        ColumnMapping(
+            "depolarised_mv",
+            FieldType.POTENTIAL,
+            ("Depolarised", "Depol", "Second Read", "Native"),
+            required=False,
+        ),
+        ColumnMapping(
+            "remark", FieldType.TEXT, ("Remark", "Comment", "Note"), required=False, default=""
+        ),
+    ),
+)
+
 PROFILES: dict[str, MappingProfile] = {
     profile.name: profile
     for profile in (
@@ -206,6 +226,7 @@ PROFILES: dict[str, MappingProfile] = {
         DCVG_PROFILE,
         SOIL_PROFILE,
         COUPON_PROFILE,
+        DEPOLARISATION_PROFILE,
     )
 }
 

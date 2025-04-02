@@ -23,6 +23,7 @@ from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
 from dropcell.findings.raise_from import from_cis_sections
 from dropcell.ingest.cis import import_cis
 from dropcell.ingest.dcvg import import_dcvg
+from dropcell.ingest.depolarisation import import_depolarisation
 from dropcell.ingest.soil import import_soil
 from dropcell.report.dig import DigItem, render_dig_sheet
 from dropcell.report.table import Column, Table
@@ -312,3 +313,72 @@ def import_soil_command(context: Context, path: Path, line_code: str, depth: str
             band=sounding.corrosivity_at(at_depth),
         )
     click.echo(table.render())
+
+
+DEPOL_COLUMNS = (
+    Column("code", "Post"),
+    Column("off", "Off mV", align="right", format=".0f"),
+    Column("depol", "Depol mV", align="right", format=".0f"),
+    Column("decay", "Decay mV", align="right", format=".0f"),
+    Column("meets", "Meets"),
+)
+
+
+@survey_group.command("depol")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--line", "line_code", required=True)
+@click.option("--off-at", required=True, help="When everything was switched off.")
+@click.option("--read-at", required=True, help="When the second pass was read.")
+@click.option("--by", "technician", default="")
+@pass_context
+@handled
+def analyse_depol(
+    context: Context,
+    path: Path,
+    line_code: str,
+    off_at: str,
+    read_at: str,
+    technician: str,
+) -> None:
+    """Load a depolarisation survey and score it."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    loaded = import_depolarisation(
+        database,
+        path.read_text(encoding="utf-8"),
+        line_code=line.code,
+        switched_off_at=dt.datetime.fromisoformat(off_at),
+        read_back_at=dt.datetime.fromisoformat(read_at),
+        now=dt.datetime.combine(context.today, dt.time(12, 0)),
+        source=path.name,
+        technician=technician,
+    )
+    survey = loaded.survey
+    click.echo(f"survey {loaded.survey_id} on {line.code}, {loaded.points} posts")
+    click.echo(f"{survey.hours_off:.1f} hours off")
+    if loaded.quarantined:
+        click.echo(f"{loaded.quarantined} rows could not be read")
+    for problem in survey.problems():
+        click.echo(f"  {problem}")
+    click.echo("")
+    minimum = context.settings.decay_mv
+    table = Table(
+        columns=DEPOL_COLUMNS,
+        title=f"Depolarisation, {line.code}",
+        empty_note="nothing was read twice",
+    )
+    for point in survey.points:
+        meets = point.meets(minimum)
+        table.add(
+            code=point.test_point_code,
+            off=point.off_mv,
+            depol=point.depolarised_mv,
+            decay=point.decay_mv,
+            meets="" if meets is None else ("yes" if meets else "no"),
+        )
+    click.echo(table.render())
+    click.echo("")
+    click.echo(
+        f"{len(survey.meeting(minimum))} of {len(survey.read_back)} posts read twice"
+        f" reached {minimum:.0f} mV"
+    )
