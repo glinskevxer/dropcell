@@ -10,6 +10,7 @@ from __future__ import annotations
 import click
 
 from dropcell.analysis.coverage import coverage
+from dropcell.analysis.history import compare_years, latest_pair, years_present
 from dropcell.analysis.line import assess_line
 from dropcell.analysis.schedule import line_histories
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
@@ -352,3 +353,70 @@ def interference_report(context: Context, line_code: str) -> None:
     for joint in IsolationJointRepository(database).for_line(line.code):
         rows.append(joint_row(joint, history.latest_isolation_test(joint.code)))
     click.echo(render_interference(line, rows, as_of=context.today))
+
+
+CHANGE_COLUMNS = (
+    Column("code", "Post"),
+    Column("station", "Station", align="right"),
+    Column("was", "Was mV", align="right", format=".0f"),
+    Column("now", "Now mV", align="right", format=".0f"),
+    Column("moved", "Moved mV", align="right", format="+.0f"),
+)
+
+
+@report_group.command("history")
+@click.option("--line", "line_code", required=True)
+@click.option("--from", "earlier", type=int, default=None, help="Earlier year.")
+@click.option("--to", "later", type=int, default=None, help="Later year.")
+@pass_context
+@handled
+def history_report(
+    context: Context, line_code: str, earlier: int | None, later: int | None
+) -> None:
+    """Compare two years of one line, post by post."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    readings = ReadingRepository(database).for_line(line.code, lead=LeadKind.PIPE)
+    years = years_present(readings)
+    if earlier is None or later is None:
+        pair = latest_pair(readings)
+        if pair is None:
+            click.echo("there are readings in fewer than two years, so nothing can be compared")
+            click.echo(
+                f"years with readings: {', '.join(str(year) for year in years) or 'none'}"
+            )
+            return
+        earlier, later = pair
+    result = compare_years(
+        line.code,
+        readings,
+        earlier_year=earlier,
+        later_year=later,
+        threshold_mv=context.settings.protection_mv,
+    )
+    stations = {
+        post.code: line.format_station(post.station)
+        for post in TestPointRepository(database).for_line(line.code)
+    }
+    click.echo(result.summary())
+    click.echo("")
+    for title, changes in (
+        ("Lost criterion", result.lost),
+        ("Gained criterion", result.gained),
+    ):
+        table = Table(columns=CHANGE_COLUMNS, title=title, empty_note="none")
+        for change in changes:
+            table.add(
+                code=change.test_point_code,
+                station=stations.get(change.test_point_code, ""),
+                was=change.was_mv,
+                now=change.now_mv,
+                moved=change.movement_mv,
+            )
+        click.echo(table.render())
+        click.echo("")
+    click.echo(
+        f"{len(result.held)} posts held their side, "
+        f"{len(result.only_earlier)} were read only in {earlier}, "
+        f"{len(result.only_later)} only in {later}"
+    )
