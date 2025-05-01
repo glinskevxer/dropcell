@@ -12,10 +12,14 @@ import click
 from dropcell.analysis.coverage import coverage
 from dropcell.analysis.history import compare_years, latest_pair, years_present
 from dropcell.analysis.line import assess_line
+from dropcell.analysis.risk import by_exposure, score_segment, total_exposure
+from dropcell.analysis.risk import rank as rank_risk
 from dropcell.analysis.schedule import line_histories
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import LeadKind
+from dropcell.model.segment import Segment
+from dropcell.model.testpoint import TestPoint
 from dropcell.report.annual import AnnualReport
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
@@ -420,3 +424,91 @@ def history_report(
         f"{len(result.only_earlier)} were read only in {earlier}, "
         f"{len(result.only_later)} only in {later}"
     )
+
+
+RISK_COLUMNS = (
+    Column("code", "Segment"),
+    Column("from", "From", align="right"),
+    Column("to", "To", align="right"),
+    Column("length", "Length m", align="right", format=".0f"),
+    Column("coating", "Coating", width=16),
+    Column("surveyed", "Last walked"),
+    Column("covered", "In reach", align="right", format=".0%"),
+    Column("score", "Score", align="right", format=".2f"),
+    Column("exposure", "Score km", align="right", format=".2f"),
+)
+
+
+@report_group.command("risk")
+@click.option("--line", "line_code", required=True)
+@click.option("--by-length", is_flag=True, help="Order by score weighted by length.")
+@click.option("--explain", is_flag=True, help="Write the scoring out underneath.")
+@pass_context
+@handled
+def risk_report(context: Context, line_code: str, by_length: bool, explain: bool) -> None:
+    """Where the next survey and the next rectifier should go."""
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    segments = SegmentRepository(database).for_line(line.code)
+    posts = TestPointRepository(database).for_line(line.code)
+    reach = context.settings.post_reach_m
+    scores = []
+    walked: dict[str, str] = {}
+    for segment in segments:
+        covered = _covered_share(segment, posts, reach)
+        scores.append(
+            score_segment(
+                segment,
+                as_of=context.today,
+                years_since_survey=None,
+                covered_share=covered,
+            )
+        )
+        walked[segment.code] = "never"
+    ordered = by_exposure(scores) if by_length else rank_risk(scores)
+    table = Table(
+        columns=RISK_COLUMNS,
+        title=f"Segment risk, {line.code}",
+        empty_note="no segments on this line",
+    )
+    by_code = {segment.code: segment for segment in segments}
+    for score in ordered:
+        segment = by_code[score.segment_code]
+        table.add(
+            code=score.segment_code,
+            **{
+                "from": segment.extent.start.format(line.convention),
+                "to": segment.extent.end.format(line.convention),
+            },
+            length=score.length_m,
+            coating=str(segment.coating),
+            surveyed=walked[score.segment_code],
+            covered=_covered_share(segment, posts, reach),
+            score=score.score,
+            exposure=score.exposure,
+        )
+    click.echo(table.render())
+    click.echo("")
+    click.echo(f"{len(scores)} segments, total exposure {total_exposure(scores):.1f} score km")
+    if explain:
+        click.echo("")
+        for score in ordered:
+            click.echo(f"  {score.explain()}")
+
+
+def _covered_share(segment: Segment, posts: list[TestPoint], reach_m: float) -> float:
+    """How much of a segment sits inside the reach of some post."""
+    if segment.length_m <= 0:
+        return 0.0
+    covered = 0.0
+    cursor = segment.extent.start.metres
+    for post in sorted(posts, key=lambda item: item.station.metres):
+        low = max(segment.extent.start.metres, post.station.metres - reach_m)
+        high = min(segment.extent.end.metres, post.station.metres + reach_m)
+        if high <= low:
+            continue
+        low = max(low, cursor)
+        if high > low:
+            covered += high - low
+            cursor = high
+    return min(1.0, covered / segment.length_m)
