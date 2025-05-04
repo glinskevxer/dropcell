@@ -57,7 +57,7 @@ def test_a_line_with_one_year_of_readings_cannot_be_compared(
 ) -> None:
     seed(run)
     read(run, "TP-1", "2024-05-02", "-905")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     assert result.exit_code == 0
     assert "fewer than two years" in result.output
     assert "years with readings: 2024" in result.output
@@ -65,7 +65,7 @@ def test_a_line_with_one_year_of_readings_cannot_be_compared(
 
 def test_a_line_with_no_readings_says_so(run: Callable[..., Result]) -> None:
     seed(run)
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     assert "years with readings: none" in result.output
 
 
@@ -76,7 +76,7 @@ def test_the_two_most_recent_years_are_compared_by_default(
     read(run, "TP-1", "2022-05-02", "-905")
     read(run, "TP-1", "2023-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-800")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     assert "AL-2 2023 to 2024" in result.output
     assert "net -1" in result.output
 
@@ -87,7 +87,7 @@ def test_a_post_that_lost_criterion_is_on_the_page(
     seed(run)
     read(run, "TP-1", "2023-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-800")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     lost = result.output.split("Lost criterion")[1].split("Gained criterion")[0]
     assert "TP-1" in lost
     assert "+105" in lost
@@ -99,7 +99,7 @@ def test_a_post_that_gained_criterion_is_on_the_page(
     seed(run)
     read(run, "TP-1", "2023-05-02", "-800")
     read(run, "TP-1", "2024-05-02", "-905")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     gained = result.output.split("Gained criterion")[1]
     assert "TP-1" in gained
 
@@ -108,7 +108,7 @@ def test_the_years_can_be_named(run: Callable[..., Result]) -> None:
     seed(run)
     read(run, "TP-1", "2021-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-800")
-    result = run("report", "history", "--line", "AL-2", "--from", "2021", "--to", "2024")
+    result = run("plan", "history", "--line", "AL-2", "--from", "2021", "--to", "2024")
     assert "AL-2 2021 to 2024" in result.output
 
 
@@ -119,7 +119,7 @@ def test_a_post_read_in_only_one_year_is_counted_separately(
     read(run, "TP-1", "2023-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-905")
     read(run, "TP-2", "2024-05-02", "-905")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     assert "1 posts held their side" in result.output
     assert "1 only in 2024" in result.output
 
@@ -130,7 +130,7 @@ def test_a_stable_line_reports_nothing_on_either_table(
     seed(run)
     read(run, "TP-1", "2023-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-910")
-    result = run("report", "history", "--line", "AL-2")
+    result = run("plan", "history", "--line", "AL-2")
     assert result.output.count("none") >= 2
 
 
@@ -140,8 +140,8 @@ def test_the_stations_are_printed_in_the_line_convention(
     seed(run)
     read(run, "TP-1", "2023-05-02", "-905")
     read(run, "TP-1", "2024-05-02", "-800")
-    assert "10+00.00" in run("report", "history", "--line", "AL-2").output
+    assert "10+00.00" in run("plan", "history", "--line", "AL-2").output
 
 
 def test_a_line_that_is_not_there_exits_three(run: Callable[..., Result]) -> None:
-    assert run("report", "history", "--line", "ZZ-9").exit_code == 3
+    assert run("plan", "history", "--line", "ZZ-9").exit_code == 3

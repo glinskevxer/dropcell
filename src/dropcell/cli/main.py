@@ -21,6 +21,7 @@ from dropcell.cli.findings import finding_group
 from dropcell.cli.imports import import_group
 from dropcell.cli.interference import plant_group
 from dropcell.cli.lines import line_group, segment_group
+from dropcell.cli.planning import plan_group
 from dropcell.cli.posts import post_group
 from dropcell.cli.rectifiers import rectifier_group
 from dropcell.cli.reports import report_group
@@ -121,6 +122,7 @@ main.add_command(segment_group)
 main.add_command(post_group)
 main.add_command(import_group)
 main.add_command(report_group)
+main.add_command(plan_group)
 main.add_command(finding_group)
 main.add_command(rectifier_group)
 main.add_command(survey_group)

@@ -69,12 +69,12 @@ def seed(run: Callable[..., Result]) -> None:
 
 def test_a_line_with_no_segments_says_so(run: Callable[..., Result]) -> None:
     run(*ADD_LINE)
-    assert "no segments on this line" in run("report", "risk", "--line", "AL-2").output
+    assert "no segments on this line" in run("plan", "risk", "--line", "AL-2").output
 
 
 def test_every_segment_gets_a_score(run: Callable[..., Result]) -> None:
     seed(run)
-    result = run("report", "risk", "--line", "AL-2")
+    result = run("plan", "risk", "--line", "AL-2")
     assert result.exit_code == 0
     assert "AL-2-001" in result.output
     assert "AL-2-002" in result.output
@@ -85,32 +85,32 @@ def test_the_unprotected_shielded_urban_segment_scores_highest(
     run: Callable[..., Result],
 ) -> None:
     seed(run)
-    table = run("report", "risk", "--line", "AL-2").output.split("Segment risk")[1]
+    table = run("plan", "risk", "--line", "AL-2").output.split("Segment risk")[1]
     assert table.index("AL-2-002") < table.index("AL-2-001")
 
 
 def test_the_ordering_can_be_weighted_by_length(run: Callable[..., Result]) -> None:
     seed(run)
-    plain = run("report", "risk", "--line", "AL-2").output
-    weighted = run("report", "risk", "--line", "AL-2", "--by-length").output
+    plain = run("plan", "risk", "--line", "AL-2").output
+    weighted = run("plan", "risk", "--line", "AL-2", "--by-length").output
     assert "Score km" in plain
     assert "Score km" in weighted
 
 
 def test_the_scoring_can_be_written_out(run: Callable[..., Result]) -> None:
     seed(run)
-    result = run("report", "risk", "--line", "AL-2", "--explain")
+    result = run("plan", "risk", "--line", "AL-2", "--explain")
     assert " x " in result.output
     assert "no protection on it" in result.output
 
 
 def test_a_post_raises_the_covered_share(run: Callable[..., Result]) -> None:
     seed(run)
-    without = run("report", "risk", "--line", "AL-2").output
+    without = run("plan", "risk", "--line", "AL-2").output
     run(
         "post", "add", "TP-1", "--line", "AL-2", "--at", "50+00.00", "--installed", "1998-05-04"
     )
-    withpost = run("report", "risk", "--line", "AL-2").output
+    withpost = run("plan", "risk", "--line", "AL-2").output
     assert "0%" in without
     assert withpost != without
 
@@ -139,15 +139,15 @@ def test_a_fully_covered_segment_carries_no_reach_term(
         "1974",
     )
     run("post", "add", "TP-1", "--line", "AL-2", "--at", "5+00.00", "--installed", "1998-05-04")
-    result = run("report", "risk", "--line", "AL-2", "--explain")
+    result = run("plan", "risk", "--line", "AL-2", "--explain")
     assert "out of reach" not in result.output
     assert "100%" in result.output
 
 
 def test_the_total_exposure_is_printed(run: Callable[..., Result]) -> None:
     seed(run)
-    assert "total exposure" in run("report", "risk", "--line", "AL-2").output
+    assert "total exposure" in run("plan", "risk", "--line", "AL-2").output
 
 
 def test_a_line_that_is_not_there_exits_three(run: Callable[..., Result]) -> None:
-    assert run("report", "risk", "--line", "ZZ-9").exit_code == 3
+    assert run("plan", "risk", "--line", "ZZ-9").exit_code == 3

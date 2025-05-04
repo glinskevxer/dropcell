@@ -60,7 +60,7 @@ def seed(run: Callable[..., Result]) -> None:
 def test_the_programme_page_carries_every_figure(run: Callable[..., Result]) -> None:
     seed(run)
     run("post", "read", "TP-101", "--on", "-1120", "--off", "-905")
-    printed = run("report", "kpi", "--line", "AL-2")
+    printed = run("plan", "kpi", "--line", "AL-2")
     assert printed.exit_code == 0
     assert "Programme, AL-2" in printed.output
     assert "posts never read" in printed.output
@@ -68,7 +68,7 @@ def test_the_programme_page_carries_every_figure(run: Callable[..., Result]) -> 
 
 
 def test_the_programme_page_needs_a_line_that_exists(run: Callable[..., Result]) -> None:
-    assert run("report", "kpi", "--line", "ZZ-9").exit_code == 3
+    assert run("plan", "kpi", "--line", "ZZ-9").exit_code == 3
 
 
 def test_a_post_with_too_few_readings_cannot_be_fitted(
@@ -76,7 +76,7 @@ def test_a_post_with_too_few_readings_cannot_be_fitted(
 ) -> None:
     seed(run)
     run("post", "read", "TP-101", "--on", "-1120", "--off", "-905")
-    printed = run("report", "trend", "--line", "AL-2")
+    printed = run("plan", "trend", "--line", "AL-2")
     assert "no post has enough readings" in printed.output
 
 
@@ -94,7 +94,7 @@ def test_a_post_with_a_history_gets_a_slope(run: Callable[..., Result]) -> None:
             "--date",
             f"{year}-05-02",
         )
-    printed = run("report", "trend", "--line", "AL-2")
+    printed = run("plan", "trend", "--line", "AL-2")
     assert "TP-101" in printed.output
     assert "50.0" in printed.output
     assert "1 of 1 fitted posts" in printed.output
@@ -114,9 +114,9 @@ def test_a_flat_post_can_be_filtered_out(run: Callable[..., Result]) -> None:
             "--date",
             f"{year}-05-02",
         )
-    everything = run("report", "trend", "--line", "AL-2")
+    everything = run("plan", "trend", "--line", "AL-2")
     assert "TP-101" in everything.output
-    drifting = run("report", "trend", "--line", "AL-2", "--only-drifting")
+    drifting = run("plan", "trend", "--line", "AL-2", "--only-drifting")
     assert "no post has enough readings" in drifting.output
 
 
@@ -136,11 +136,11 @@ def test_the_horizon_decides_which_posts_are_counted(
             "--date",
             f"{year}-05-02",
         )
-    near = run("report", "trend", "--line", "AL-2", "--horizon", "5")
+    near = run("plan", "trend", "--line", "AL-2", "--horizon", "5")
     assert "0 of 1 fitted posts" in near.output
-    far = run("report", "trend", "--line", "AL-2", "--horizon", "200")
+    far = run("plan", "trend", "--line", "AL-2", "--horizon", "200")
     assert "1 of 1 fitted posts" in far.output
 
 
 def test_the_trend_report_needs_a_line_that_exists(run: Callable[..., Result]) -> None:
-    assert run("report", "trend", "--line", "ZZ-9").exit_code == 3
+    assert run("plan", "trend", "--line", "ZZ-9").exit_code == 3

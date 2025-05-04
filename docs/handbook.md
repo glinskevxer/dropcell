@@ -31,8 +31,11 @@ satisfy either one on its own while failing the other.
 percent of the line is a normal state of affairs on a line with posts a mile
 apart, and it is what this report exists to show.
 
-`report trend` fits a straight line through each post's history. It will not
-fit fewer than three readings and it will not extrapolate past the horizon.
+`plan trend` fits a straight line through each post's history. It will not fit
+fewer than three readings and it will not extrapolate past the horizon.
+
+The `report` group answers questions somebody has today. The `plan` group is
+read once a quarter by somebody deciding where next year's money goes.
 
 ## Units
 
