@@ -33,7 +33,7 @@ ESTATE_COLUMNS = (
     Column("unread", "Unread", align="right"),
     Column("overdue", "Overdue", align="right"),
     Column("findings", "Open", align="right"),
-    Column("state", "State", width=14),
+    Column("state", "State", width=16),
 )
 
 

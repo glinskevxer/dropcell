@@ -19,9 +19,11 @@ from dropcell.analysis.risk import rank as rank_risk
 from dropcell.analysis.schedule import line_histories
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.errors import NotFoundError
 from dropcell.model.enums import LeadKind
 from dropcell.model.segment import Segment
 from dropcell.model.testpoint import TestPoint
+from dropcell.report.estate import LineSummary, render_estate
 from dropcell.report.kpi import build_kpis
 from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
@@ -276,3 +278,49 @@ def _covered_share(segment: Segment, posts: list[TestPoint], reach_m: float) -> 
             covered += high - low
             cursor = high
     return min(1.0, covered / segment.length_m)
+
+
+@plan_group.command("estate")
+@pass_context
+@handled
+def estate_report(context: Context) -> None:
+    """Every line in the register on one page."""
+    database = context.database()
+    lines = LineRepository(database).all()
+    findings = FindingRepository(database)
+    summaries: list[LineSummary] = []
+    for line in lines:
+        posts = TestPointRepository(database).for_line(line.code)
+        judged = 0
+        protected = 0
+        unread = 0
+        if posts:
+            try:
+                assessment = assess_line(
+                    database, line.code, as_of=context.today, settings=context.settings
+                )
+            except NotFoundError:
+                assessment = None
+            if assessment is not None:
+                judged = len(assessment.assessed)
+                protected = len(assessment.protected)
+                unread = len(assessment.unread)
+        register = build_register(
+            STANDARD_POLICY, line_histories(database, line.code), as_of=context.today
+        )
+        late = [item for item in register if item.overdue or not item.ever_visited]
+        open_findings = [item for item in findings.for_line(line.code) if item.is_open]
+        summaries.append(
+            LineSummary(
+                code=line.code,
+                name=line.name,
+                length_m=line.length_m,
+                posts=len(posts),
+                judged=judged,
+                protected=protected,
+                unread=unread,
+                overdue=len(late),
+                open_findings=len(open_findings),
+            )
+        )
+    click.echo(render_estate(summaries, as_of=context.today))
