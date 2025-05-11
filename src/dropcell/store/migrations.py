@@ -478,6 +478,26 @@ MIGRATIONS: tuple[Migration, ...] = (
             " (line_code, switched_off_at)",
         ),
     ),
+    Migration(
+        version=12,
+        name="observations",
+        statements=(
+            """
+            CREATE TABLE observation (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                line_code    TEXT NOT NULL REFERENCES line(code) ON DELETE CASCADE,
+                subject      TEXT NOT NULL,
+                kind         TEXT NOT NULL,
+                seen_on      TEXT NOT NULL,
+                body         TEXT NOT NULL,
+                seen_by      TEXT NOT NULL DEFAULT '',
+                station_m    REAL
+            )
+            """,
+            "CREATE INDEX observation_by_line ON observation (line_code, seen_on)",
+            "CREATE INDEX observation_by_subject ON observation (subject, seen_on)",
+        ),
+    ),
 )
 
 
