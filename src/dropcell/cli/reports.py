@@ -14,6 +14,7 @@ from dropcell.analysis.line import assess_line
 from dropcell.analysis.schedule import line_histories
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.model.enums import LeadKind
+from dropcell.report.ageing import age_findings, render_ageing
 from dropcell.report.annual import AnnualReport
 from dropcell.report.compliance import render_compliance
 from dropcell.report.exceptions import render_exceptions
@@ -265,3 +266,21 @@ def interference_report(context: Context, line_code: str) -> None:
     for joint in IsolationJointRepository(database).for_line(line.code):
         rows.append(joint_row(joint, history.latest_isolation_test(joint.code)))
     click.echo(render_interference(line, rows, as_of=context.today))
+
+
+@report_group.command("ageing")
+@click.option("--line", "line_code", default=None, help="Only this line.")
+@pass_context
+@handled
+def ageing_report(context: Context, line_code: str | None) -> None:
+    """How long the open findings have been sitting there."""
+    database = context.database()
+    findings = FindingRepository(database)
+    if line_code is None:
+        open_findings = findings.open_findings()
+        label = ""
+    else:
+        label = LineRepository(database).get(line_code).code
+        open_findings = findings.open_findings(label)
+    rows = age_findings(open_findings, as_of=context.today)
+    click.echo(render_ageing(rows, as_of=context.today, line_code=label))
