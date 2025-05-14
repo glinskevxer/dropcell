@@ -21,6 +21,7 @@ from dropcell.cli.findings import finding_group
 from dropcell.cli.imports import import_group
 from dropcell.cli.interference import plant_group
 from dropcell.cli.lines import line_group, segment_group
+from dropcell.cli.notes import note_group
 from dropcell.cli.planning import plan_group
 from dropcell.cli.posts import post_group
 from dropcell.cli.rectifiers import rectifier_group
@@ -130,6 +131,7 @@ main.add_command(plant_group)
 main.add_command(work_group)
 main.add_command(register_group)
 main.add_command(coupon_group)
+main.add_command(note_group)
 
 
 if __name__ == "__main__":
