@@ -28,6 +28,13 @@ from dropcell.report.interference import (
     render_interference,
 )
 from dropcell.report.protection import render_protection
+from dropcell.report.serialise import (
+    ageing_payload,
+    compliance_payload,
+    dump,
+    finding_payload,
+    protection_payload,
+)
 from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
 from dropcell.schedule.register import build_register
@@ -62,22 +69,29 @@ def report_group() -> None:
 
 @report_group.command("protection")
 @click.option("--line", "line_code", required=True)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
 @pass_context
 @handled
-def protection_report(context: Context, line_code: str) -> None:
+def protection_report(context: Context, line_code: str, as_json: bool) -> None:
     """How the posts on one line read."""
     assessment = assess_line(
         context.database(), line_code, as_of=context.today, settings=context.settings
     )
+    if as_json:
+        click.echo(dump(protection_payload(assessment)))
+        return
     click.echo(render_protection(assessment))
 
 
 @report_group.command("exceptions")
 @click.option("--line", "line_code", default=None, help="Only this line.")
 @click.option("--all", "include_closed", is_flag=True, help="Closed findings as well.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
 @pass_context
 @handled
-def exceptions_report(context: Context, line_code: str | None, include_closed: bool) -> None:
+def exceptions_report(
+    context: Context, line_code: str | None, include_closed: bool, as_json: bool
+) -> None:
     """What is on the exception register."""
     database = context.database()
     findings = FindingRepository(database)
@@ -85,6 +99,9 @@ def exceptions_report(context: Context, line_code: str | None, include_closed: b
         found = findings.for_line(line_code) if line_code else findings.all()
     else:
         found = findings.open_findings(line_code)
+    if as_json:
+        click.echo(dump([finding_payload(item) for item in found]))
+        return
     convention = LineRepository(database).get(line_code).convention if line_code else None
     title = f"Exception register, {line_code}" if line_code else "Exception register"
     if convention is None:
@@ -98,15 +115,19 @@ def exceptions_report(context: Context, line_code: str | None, include_closed: b
 @report_group.command("compliance")
 @click.option("--line", "line_code", required=True)
 @click.option("--window", type=int, default=90, show_default=True, help="Days to look ahead.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
 @pass_context
 @handled
-def compliance_report(context: Context, line_code: str, window: int) -> None:
+def compliance_report(context: Context, line_code: str, window: int, as_json: bool) -> None:
     """What is overdue and what falls due."""
     database = context.database()
     line = LineRepository(database).get(line_code)
     register = build_register(
         STANDARD_POLICY, line_histories(database, line.code), as_of=context.today
     )
+    if as_json:
+        click.echo(dump(compliance_payload(register, as_of=context.today)))
+        return
     click.echo(
         render_compliance(
             register,
@@ -270,9 +291,10 @@ def interference_report(context: Context, line_code: str) -> None:
 
 @report_group.command("ageing")
 @click.option("--line", "line_code", default=None, help="Only this line.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
 @pass_context
 @handled
-def ageing_report(context: Context, line_code: str | None) -> None:
+def ageing_report(context: Context, line_code: str | None, as_json: bool) -> None:
     """How long the open findings have been sitting there."""
     database = context.database()
     findings = FindingRepository(database)
@@ -283,4 +305,7 @@ def ageing_report(context: Context, line_code: str | None) -> None:
         label = LineRepository(database).get(line_code).code
         open_findings = findings.open_findings(label)
     rows = age_findings(open_findings, as_of=context.today)
+    if as_json:
+        click.echo(dump(ageing_payload(rows, as_of=context.today)))
+        return
     click.echo(render_ageing(rows, as_of=context.today, line_code=label))
