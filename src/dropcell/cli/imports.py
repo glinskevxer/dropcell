@@ -22,6 +22,7 @@ from dropcell.ingest.annual import ImportOutcome, import_annual
 from dropcell.ingest.profiles import get_profile, profile_names
 from dropcell.ingest.reader import read_text
 from dropcell.ingest.rectifier import import_rectifier_checks
+from dropcell.ingest.validate import identify, try_profile
 from dropcell.report.table import Column, Table
 from dropcell.stationing import Convention
 from dropcell.store.imports import ImportLedger
@@ -148,3 +149,50 @@ def show_held(context: Context, run_id: int) -> None:
     for row in held:
         click.echo(f"  {row.summary}")
         click.echo(f"    {', '.join(row.raw)}")
+
+
+MATCH_COLUMNS = (
+    Column("profile", "Profile"),
+    Column("reads", "Reads"),
+    Column("rows", "Rows in", align="right"),
+    Column("held", "Held", align="right"),
+    Column("missing", "Missing columns", width=34),
+    Column("spare", "Headers it did not use", width=34),
+)
+
+
+@import_group.command("check")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--profile", "profile_name", default=None, help="Check against one profile.")
+@pass_context
+@handled
+def check_file(context: Context, path: Path, profile_name: str | None) -> None:
+    """Say what would happen to a file, without opening the register."""
+    text = path.read_text(encoding="utf-8")
+    if profile_name is not None:
+        matches = [try_profile(text, get_profile(profile_name))]
+    else:
+        matches = identify(text)
+    table = Table(columns=MATCH_COLUMNS, title=f"{path.name}")
+    for match in matches:
+        table.add(
+            profile=match.profile,
+            reads="yes" if match.readable else "no",
+            rows=match.accepted if match.readable else None,
+            held=match.rejected if match.readable else None,
+            missing=", ".join(match.missing),
+            spare=", ".join(match.unmatched_headers),
+        )
+    click.echo(table.render())
+    readable = [match for match in matches if match.readable]
+    if not readable:
+        click.echo("")
+        click.echo("no profile this build ships can read that file")
+        return
+    best = readable[0]
+    click.echo("")
+    click.echo(f"best match is {best.profile}, {best.accepted} rows would read")
+    for header, field_name in best.matched:
+        click.echo(f"  {header} -> {field_name}")
+    for header in best.unmatched_headers:
+        click.echo(f"  {header} -> nothing, this column would be ignored")
