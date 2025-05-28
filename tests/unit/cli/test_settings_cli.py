@@ -208,3 +208,44 @@ def test_the_criterion_from_the_settings_reaches_the_protection_report(
     assert "protection rate 0.0%" in tight.output
     loose = run_with("report", "protection", "--line", "AL-2", config=None)
     assert "protection rate 100.0%" in loose.output
+
+
+CONTRACTOR_TOML = """
+[[profiles]]
+name = "beckside"
+description = "the file Beckside Surveys send"
+
+  [[profiles.columns]]
+  field = "station"
+  type = "station"
+  headers = ["POS"]
+
+  [[profiles.columns]]
+  field = "on_mv"
+  type = "potential"
+  headers = ["VON"]
+"""
+
+
+def test_a_profile_from_the_settings_shows_up_in_the_listing(
+    register: Path, tmp_path: Path
+) -> None:
+    config = tmp_path / "contractor.toml"
+    config.write_text(CONTRACTOR_TOML, encoding="utf-8")
+    result = CliRunner().invoke(
+        main, ["--register", str(register), "--config", str(config), "import", "profiles"]
+    )
+    assert "beckside" in result.output
+    assert "Beckside Surveys" in result.output
+
+
+def test_a_file_is_checked_against_the_added_profile(register: Path, tmp_path: Path) -> None:
+    config = tmp_path / "contractor.toml"
+    config.write_text(CONTRACTOR_TOML, encoding="utf-8")
+    target = tmp_path / "beckside.csv"
+    target.write_text("POS,VON\n0+00.00,-1120\n", encoding="utf-8")
+    result = CliRunner().invoke(
+        main,
+        ["--register", str(register), "--config", str(config), "import", "check", str(target)],
+    )
+    assert "best match is beckside" in result.output

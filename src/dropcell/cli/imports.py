@@ -59,12 +59,15 @@ def _dry_run(text: str, profile_name: str, convention: Convention, source: str) 
 
 
 @import_group.command("profiles")
+@pass_context
 @handled
-def list_profiles() -> None:
+def list_profiles(context: Context) -> None:
     """List the file formats this build knows."""
     table = Table(columns=(Column("name", "Profile"), Column("about", "Reads", width=52)))
     for name in profile_names():
         table.add(name=name, about=get_profile(name).description)
+    for profile in context.settings.profiles:
+        table.add(name=profile.name, about=profile.description)
     click.echo(table.render())
 
 
@@ -170,9 +173,12 @@ def check_file(context: Context, path: Path, profile_name: str | None) -> None:
     """Say what would happen to a file, without opening the register."""
     text = path.read_text(encoding="utf-8")
     if profile_name is not None:
-        matches = [try_profile(text, get_profile(profile_name))]
+        chosen = context.settings.profile(profile_name) or get_profile(profile_name)
+        matches = [try_profile(text, chosen)]
     else:
         matches = identify(text)
+        matches.extend(try_profile(text, profile) for profile in context.settings.profiles)
+        matches.sort(key=lambda item: item.score, reverse=True)
     table = Table(columns=MATCH_COLUMNS, title=f"{path.name}")
     for match in matches:
         table.add(
