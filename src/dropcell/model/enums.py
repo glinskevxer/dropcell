@@ -228,3 +228,27 @@ class GroundbedKind(StrEnum):
         anything else buried nearby.
         """
         return self in {GroundbedKind.DEEP_WELL, GroundbedKind.SHALLOW_HORIZONTAL}
+
+
+class LineStatus(StrEnum):
+    """Whether a line is still carrying anything.
+
+    A line that has been abandoned in place is still buried steel and still
+    connected to everything around it, so it does not leave the register. It
+    stops being monitored, which is a different fact, and one that has to be
+    written down rather than inferred from nobody having read it for two years.
+    """
+
+    IN_SERVICE = "in_service"
+    ABANDONED_IN_PLACE = "abandoned_in_place"
+    REMOVED = "removed"
+
+    @property
+    def is_monitored(self) -> bool:
+        """Whether the monitoring rules still apply to it."""
+        return self is LineStatus.IN_SERVICE
+
+    @property
+    def is_still_in_the_ground(self) -> bool:
+        """Whether the steel is still there to interfere with anything else."""
+        return self is not LineStatus.REMOVED

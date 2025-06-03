@@ -12,7 +12,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 from dropcell.errors import ValidationError
-from dropcell.model.enums import Commodity
+from dropcell.model.enums import Commodity, LineStatus
 from dropcell.model.ids import normalise_code
 from dropcell.stationing import Convention, Station, StationRange
 
@@ -32,6 +32,8 @@ class Line:
     nominal_diameter_mm: float
     installed_year: int
     convention: Convention = Convention.FOOT
+    status: LineStatus = LineStatus.IN_SERVICE
+    retired_on: dt.date | None = None
     notes: str = field(default="", compare=False)
 
     def __post_init__(self) -> None:
@@ -51,6 +53,19 @@ class Line:
                 code=self.code,
                 year=self.installed_year,
             )
+        if self.status is LineStatus.IN_SERVICE and self.retired_on is not None:
+            raise ValidationError("a line in service has not been retired", code=self.code)
+        if self.status is not LineStatus.IN_SERVICE and self.retired_on is None:
+            raise ValidationError(
+                "a retired line needs the date it came out of service", code=self.code
+            )
+        if self.retired_on is not None and self.retired_on.year < self.installed_year:
+            raise ValidationError("a line cannot be retired before it went in", code=self.code)
+
+    @property
+    def is_monitored(self) -> bool:
+        """Whether the monitoring rules still apply to this line."""
+        return self.status.is_monitored
 
     @property
     def extent(self) -> StationRange:

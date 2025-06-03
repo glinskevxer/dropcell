@@ -71,7 +71,8 @@ def test_the_base_refuses_to_build_a_record_it_was_not_told_how_to(
         noun = "thing"
 
     database.execute(
-        "INSERT INTO line VALUES ('AL-2', 'a', 'b', 'natural_gas', 1, 1, 1974, 'foot', '')"
+        "INSERT INTO line VALUES ('AL-2', 'a', 'b', 'natural_gas', 1, 1, 1974, 'foot',"
+        " '', 'in_service', NULL)"
     )
     with pytest.raises(NotImplementedError):
         Bare(database).all()

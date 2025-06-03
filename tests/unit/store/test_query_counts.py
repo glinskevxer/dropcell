@@ -200,7 +200,7 @@ def test_the_counter_moves_with_every_statement(database: Database) -> None:
     before = database.statements
     database.query("SELECT count(*) FROM line")
     assert database.statements == before + 1
-    database.executemany("INSERT INTO line VALUES (?,?,?,?,?,?,?,?,?)", [])
+    database.executemany("INSERT INTO line VALUES (?,?,?,?,?,?,?,?,?,?,?)", [])
     assert database.statements == before + 2
 
 

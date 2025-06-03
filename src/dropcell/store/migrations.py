@@ -498,6 +498,15 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX observation_by_subject ON observation (subject, seen_on)",
         ),
     ),
+    Migration(
+        version=13,
+        name="line status",
+        statements=(
+            "ALTER TABLE line ADD COLUMN status TEXT NOT NULL DEFAULT 'in_service'",
+            "ALTER TABLE line ADD COLUMN retired_on TEXT",
+            "CREATE INDEX line_by_status ON line (status)",
+        ),
+    ),
 )
 
 

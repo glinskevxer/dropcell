@@ -118,7 +118,7 @@ def test_a_segment_that_runs_backwards_is_refused_by_the_schema() -> None:
     migrate(database)
     database.execute(
         "INSERT INTO line VALUES ('AL-2', 'Ashfield', 'Northmoor', 'natural_gas',"
-        " 18500, 323.9, 1974, 'foot', '')"
+        " 18500, 323.9, 1974, 'foot', '', 'in_service', NULL)"
     )
     with pytest.raises(ConflictError):
         database.execute(
