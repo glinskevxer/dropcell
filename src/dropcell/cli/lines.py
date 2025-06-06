@@ -14,7 +14,13 @@ from __future__ import annotations
 import click
 
 from dropcell.cli.context import Context, handled, pass_context
-from dropcell.model.enums import ClassLocation, CoatingType, Commodity, ProtectionMethod
+from dropcell.model.enums import (
+    ClassLocation,
+    CoatingType,
+    Commodity,
+    LineStatus,
+    ProtectionMethod,
+)
 from dropcell.model.line import Line
 from dropcell.model.segment import Segment
 from dropcell.report.table import Column, Table
@@ -31,6 +37,8 @@ LINE_COLUMNS = (
     Column("diameter", "OD mm", align="right", format=".1f"),
     Column("year", "Installed", align="right"),
     Column("convention", "Stationing"),
+    Column("status", "Status", width=20),
+    Column("retired", "Retired"),
 )
 
 SEGMENT_COLUMNS = (
@@ -101,12 +109,14 @@ def add_line(
 
 
 @line_group.command("list")
+@click.option("--in-service", is_flag=True, help="Leave the retired lines out.")
 @pass_context
 @handled
-def list_lines(context: Context) -> None:
+def list_lines(context: Context, in_service: bool) -> None:
     """List every line in the register."""
+    lines = LineRepository(context.database())
     table = Table(columns=LINE_COLUMNS, empty_note="no lines in the register")
-    for line in LineRepository(context.database()).all():
+    for line in lines.in_service() if in_service else lines.all():
         table.add(
             code=line.code,
             name=line.name,
@@ -115,6 +125,8 @@ def list_lines(context: Context) -> None:
             diameter=line.nominal_diameter_mm,
             year=line.installed_year,
             convention=str(line.convention),
+            status=str(line.status),
+            retired=line.retired_on.isoformat() if line.retired_on else "",
         )
     click.echo(table.render())
 
@@ -135,6 +147,9 @@ def show_line(context: Context, code: str) -> None:
     click.echo(f"diameter    {line.nominal_diameter_mm:.1f} mm")
     click.echo(f"installed   {line.installed_year}")
     click.echo(f"stationing  {line.convention}")
+    click.echo(f"status      {line.status}")
+    if line.retired_on:
+        click.echo(f"retired     {line.retired_on.isoformat()}")
     if line.notes:
         click.echo(f"notes       {line.notes}")
     click.echo("")
@@ -250,3 +265,54 @@ def _segment_table(convention: Convention, segments: list[Segment]) -> Table:
             soil=segment.soil_resistivity_ohm_m,
         )
     return table
+
+
+@line_group.command("retire")
+@click.argument("code")
+@click.option(
+    "--status",
+    type=click.Choice([str(item) for item in LineStatus if item is not LineStatus.IN_SERVICE]),
+    default=str(LineStatus.ABANDONED_IN_PLACE),
+    show_default=True,
+)
+@click.option("--on", "retired_on", default=None, help="Defaults to the working date.")
+@pass_context
+@handled
+def retire_line(context: Context, code: str, status: str, retired_on: str | None) -> None:
+    """Take a line out of service without taking it out of the register.
+
+    An abandoned line is still buried steel. It stops being monitored and it
+    goes on interfering with everything around it, so it stays where it is with
+    a status against it rather than being deleted.
+    """
+    import dataclasses
+    import datetime as dt
+
+    database = context.database()
+    lines = LineRepository(database)
+    line = lines.get(code)
+    retired = lines.save(
+        dataclasses.replace(
+            line,
+            status=LineStatus(status),
+            retired_on=dt.date.fromisoformat(retired_on) if retired_on else context.today,
+        )
+    )
+    click.echo(f"{retired.code} is {retired.status} from {retired.retired_on}")
+    if retired.status.is_still_in_the_ground:
+        click.echo("  the steel is still there, so it can still take and give interference")
+
+
+@line_group.command("return")
+@click.argument("code")
+@pass_context
+@handled
+def return_line(context: Context, code: str) -> None:
+    """Put a retired line back in service."""
+    import dataclasses
+
+    database = context.database()
+    lines = LineRepository(database)
+    line = lines.get(code)
+    back = lines.save(dataclasses.replace(line, status=LineStatus.IN_SERVICE, retired_on=None))
+    click.echo(f"{back.code} is back in service")
