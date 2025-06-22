@@ -95,10 +95,23 @@ def exception_table(
     as_of: dt.date,
     convention: Convention = Convention.FOOT,
     title: str = "Exception register",
+    by_kind: bool = False,
 ) -> Table:
-    """Build the table of findings."""
+    """Build the table of findings.
+
+    Grouped by kind the register reads as a set of problems; ungrouped it reads
+    as a work list. Both are wanted and by different people, so the ordering
+    inside a group stays the one the work should happen in either way.
+    """
     table = Table(columns=EXCEPTION_COLUMNS, title=title, empty_note="no exceptions raised")
-    for finding in order(findings, as_of):
+    ordered = (
+        sorted(order(findings, as_of), key=lambda item: str(item.kind))
+        if by_kind
+        else order(findings, as_of)
+    )
+    if by_kind:
+        table.group_by("kind")
+    for finding in ordered:
         table.add(
             code=finding.code,
             kind=str(finding.kind),
@@ -122,9 +135,12 @@ def render_exceptions(
     as_of: dt.date,
     convention: Convention = Convention.FOOT,
     title: str = "Exception register",
+    by_kind: bool = False,
 ) -> str:
     """The whole report, table and summary."""
-    table = exception_table(findings, as_of=as_of, convention=convention, title=title)
+    table = exception_table(
+        findings, as_of=as_of, convention=convention, title=title, by_kind=by_kind
+    )
     summary = summarise(findings, as_of)
     return f"{table.render()}\n\n{summary.render()}"
 

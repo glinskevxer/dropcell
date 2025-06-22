@@ -87,10 +87,17 @@ def protection_report(context: Context, line_code: str, as_json: bool) -> None:
 @click.option("--line", "line_code", default=None, help="Only this line.")
 @click.option("--all", "include_closed", is_flag=True, help="Closed findings as well.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of a table.")
+@click.option(
+    "--by-kind", is_flag=True, help="Group the register by what sort of finding it is."
+)
 @pass_context
 @handled
 def exceptions_report(
-    context: Context, line_code: str | None, include_closed: bool, as_json: bool
+    context: Context,
+    line_code: str | None,
+    include_closed: bool,
+    as_json: bool,
+    by_kind: bool,
 ) -> None:
     """What is on the exception register."""
     database = context.database()
@@ -105,10 +112,16 @@ def exceptions_report(
     convention = LineRepository(database).get(line_code).convention if line_code else None
     title = f"Exception register, {line_code}" if line_code else "Exception register"
     if convention is None:
-        click.echo(render_exceptions(found, as_of=context.today, title=title))
+        click.echo(render_exceptions(found, as_of=context.today, title=title, by_kind=by_kind))
         return
     click.echo(
-        render_exceptions(found, as_of=context.today, convention=convention, title=title)
+        render_exceptions(
+            found,
+            as_of=context.today,
+            convention=convention,
+            title=title,
+            by_kind=by_kind,
+        )
     )
 
 

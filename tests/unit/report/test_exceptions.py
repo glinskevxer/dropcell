@@ -136,3 +136,36 @@ def test_grouping_splits_the_register_by_kind() -> None:
 
 def test_grouping_nothing_gives_nothing() -> None:
     assert by_kind([]) == {}
+
+
+def test_grouping_by_kind_breaks_the_table_up() -> None:
+    findings = [
+        finding(code="F-1"),
+        finding(code="F-2", kind=FindingKind.COATING_DEFECT),
+        finding(code="F-3"),
+    ]
+    rendered = exception_table(findings, as_of=TODAY, by_kind=True).render()
+    assert rendered.count("coating_defect") == 1
+    assert rendered.count("under_criterion") == 1
+
+
+def test_grouping_keeps_the_work_order_inside_a_group() -> None:
+    findings = [
+        finding(code="F-1", due_by=dt.date(2025, 9, 1)),
+        finding(code="F-2", due_by=dt.date(2025, 4, 1)),
+    ]
+    rendered = exception_table(findings, as_of=TODAY, by_kind=True).render()
+    assert rendered.index("F-2") < rendered.index("F-1")
+
+
+def test_the_ungrouped_table_is_unchanged() -> None:
+    findings = [finding(code="F-1"), finding(code="F-2", kind=FindingKind.COATING_DEFECT)]
+    plain = exception_table(findings, as_of=TODAY).render()
+    assert plain.count("under_criterion") == 1
+    assert "\n\n" not in plain.split("Kind")[1]
+
+
+def test_the_whole_report_can_be_grouped() -> None:
+    rendered = render_exceptions([finding()], as_of=TODAY, by_kind=True)
+    assert "under_criterion" in rendered
+    assert "1 findings" in rendered

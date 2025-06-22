@@ -158,3 +158,54 @@ def test_the_json_is_sorted_so_a_diff_is_readable(run: Callable[..., Result]) ->
     text = run("report", "protection", "--line", "AL-2", "--json").output
     keys = [line.strip().split('"')[1] for line in text.splitlines() if line.startswith('  "')]
     assert keys == sorted(keys)
+
+
+def test_the_exception_register_can_be_grouped_by_kind(
+    run: Callable[..., Result],
+) -> None:
+    seed(run)
+    run(
+        "finding",
+        "raise",
+        "--line",
+        "AL-2",
+        "--kind",
+        "under_criterion",
+        "--from",
+        "10+00.00",
+        "--summary",
+        "under criterion",
+    )
+    run(
+        "finding",
+        "raise",
+        "--line",
+        "AL-2",
+        "--kind",
+        "coating_defect",
+        "--from",
+        "20+00.00",
+        "--summary",
+        "category four",
+    )
+    grouped = run("report", "exceptions", "--by-kind").output
+    assert grouped.count("coating_defect") == 1
+    assert grouped.count("under_criterion") == 1
+
+
+def test_grouping_and_json_do_not_fight(run: Callable[..., Result]) -> None:
+    seed(run)
+    run(
+        "finding",
+        "raise",
+        "--line",
+        "AL-2",
+        "--kind",
+        "under_criterion",
+        "--from",
+        "10+00.00",
+        "--summary",
+        "under criterion",
+    )
+    payload = json.loads(run("report", "exceptions", "--by-kind", "--json").output)
+    assert payload[0]["kind"] == "under_criterion"
