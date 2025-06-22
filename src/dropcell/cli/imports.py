@@ -16,6 +16,7 @@ from pathlib import Path
 
 import click
 
+from dropcell import logs
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.electrodes import Electrode
 from dropcell.ingest.annual import ImportOutcome, import_annual
@@ -44,6 +45,14 @@ def import_group() -> None:
 
 
 def _report(outcome: ImportOutcome) -> None:
+    logs.imported(
+        outcome.source,
+        kind=outcome.run.kind,
+        accepted=outcome.run.accepted,
+        rejected=outcome.run.rejected,
+        written=outcome.written,
+        skipped=len(outcome.skipped),
+    )
     click.echo(f"{outcome.written} rows written from {outcome.source or 'the input'}")
     if outcome.quarantined:
         click.echo(f"{outcome.quarantined} rows could not be read")

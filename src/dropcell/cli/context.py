@@ -24,6 +24,7 @@ from typing import Any, TypeVar
 
 import click
 
+from dropcell import logs
 from dropcell.config import Settings
 from dropcell.errors import (
     ConflictError,
@@ -34,7 +35,7 @@ from dropcell.errors import (
     ValidationError,
 )
 from dropcell.store.database import Database
-from dropcell.store.migrations import migrate
+from dropcell.store.migrations import latest_version, migrate
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -73,7 +74,9 @@ class Context:
         """Open the register, migrating it if it is behind."""
         if self._database is None:
             store = Database(self.register_path)
-            migrate(store)
+            ran = migrate(store)
+            logs.migrated(self.register_path, [item.version for item in ran])
+            logs.opened(self.register_path, version=latest_version())
             self._database = store
         return self._database
 

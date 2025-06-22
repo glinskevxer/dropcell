@@ -13,7 +13,7 @@ from pathlib import Path
 
 import click
 
-from dropcell import __version__
+from dropcell import __version__, logs
 from dropcell.cli.admin import register_group
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.cli.coupons import coupon_group
@@ -57,6 +57,13 @@ DEFAULT_REGISTER = "cp.sqlite"
     help="Work to this date instead of the real one, as YYYY-MM-DD.",
 )
 @click.option("--quiet", "-q", is_flag=True, help="Say nothing but the output.")
+@click.option(
+    "--verbose",
+    "-v",
+    "verbosity",
+    count=True,
+    help="Log to standard error. Give twice for everything.",
+)
 @click.version_option(__version__, prog_name="dropcell")
 @click.pass_context
 def main(
@@ -65,8 +72,10 @@ def main(
     config_path: Path | None,
     today: str | None,
     quiet: bool,
+    verbosity: int,
 ) -> None:
     """Cathodic protection monitoring for buried steel pipelines."""
+    logs.configure(verbosity, quiet=quiet)
     anchor = dt.date.fromisoformat(today) if today else dt.date.today()
     settings = load_or_default(config_path)
     ctx.obj = Context(
