@@ -20,6 +20,7 @@ from typing import Any
 from dropcell.errors import ValidationError
 
 ELLIPSIS = "…"
+_NO_GROUP = object()
 
 
 @dataclass(frozen=True)
@@ -67,16 +68,37 @@ def truncate(text: str, width: int) -> str:
 
 @dataclass
 class Table:
-    """A table waiting to be rendered."""
+    """A table waiting to be rendered.
+
+    A table can carry group headings. They are a break and a label rather than
+    a nested structure, because a report that a person reads down a column of
+    is a report with one set of column widths, and indenting a group would put
+    the numbers in two places.
+    """
 
     columns: Sequence[Column]
     rows: list[dict[str, Any]] = field(default_factory=list)
     title: str = ""
     empty_note: str = "nothing to report"
+    group_key: str | None = None
+    group_label: str = ""
 
     def add(self, **values: Any) -> Table:
         """Add one row and return the table, so calls can be chained."""
         self.rows.append(dict(values))
+        return self
+
+    def group_by(self, key: str, *, label: str = "") -> Table:
+        """Break the rendered table wherever a column's value changes.
+
+        The rows are not reordered. A caller that wants them together sorts
+        them, and one that does not gets a break every time the value changes,
+        which is occasionally what a report of events in order wants.
+        """
+        if not any(column.key == key for column in self.columns):
+            raise ValidationError("cannot group on a column the table does not have", key=key)
+        self.group_key = key
+        self.group_label = label
         return self
 
     def extend(self, rows: Iterable[dict[str, Any]]) -> Table:
@@ -86,7 +108,11 @@ class Table:
 
     def _cells(self) -> list[list[str]]:
         return [
-            [column.render(row.get(column.key)) for column in self.columns] for row in self.rows
+            [
+                "" if column.key == self.group_key else column.render(row.get(column.key))
+                for column in self.columns
+            ]
+            for row in self.rows
         ]
 
     def _widths(self, cells: list[list[str]]) -> list[int]:
@@ -118,8 +144,18 @@ class Table:
             for column, width in zip(self.columns, widths, strict=True)
         )
         lines.append(header.rstrip())
-        lines.append("  ".join("-" * width for width in widths))
-        for row in cells:
+        rule = "  ".join("-" * width for width in widths)
+        lines.append(rule)
+        previous: Any = _NO_GROUP
+        for row, values in zip(cells, self.rows, strict=True):
+            if self.group_key is not None:
+                current = values.get(self.group_key)
+                if current != previous:
+                    if previous is not _NO_GROUP:
+                        lines.append("")
+                    label = self.group_label
+                    lines.append(f"{label}{current}" if label else str(current))
+                    previous = current
             lines.append(
                 "  ".join(
                     _pad(_fit(value, width, column), width, column.align)

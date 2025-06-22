@@ -117,3 +117,76 @@ def test_no_line_carries_trailing_whitespace() -> None:
 def test_the_table_stringifies_to_its_rendering() -> None:
     table = simple().add(code="TP-1", off=-905.0)
     assert str(table) == table.render()
+
+
+def grouped() -> Table:
+    return Table(
+        columns=(
+            Column("line", "Line"),
+            Column("code", "Post"),
+            Column("off", "Off mV", align="right", format=".0f"),
+        )
+    ).group_by("line")
+
+
+def test_grouping_breaks_where_the_value_changes() -> None:
+    table = grouped()
+    table.add(line="AL-2", code="TP-1", off=-905.0)
+    table.add(line="AL-2", code="TP-2", off=-880.0)
+    table.add(line="BR-9", code="TP-3", off=-910.0)
+    lines = table.render().splitlines()
+    assert lines[2] == "AL-2"
+    assert "" in lines
+    assert "BR-9" in lines
+
+
+def test_the_grouped_value_is_not_repeated_on_every_row() -> None:
+    table = grouped()
+    table.add(line="AL-2", code="TP-1", off=-905.0)
+    table.add(line="AL-2", code="TP-2", off=-880.0)
+    assert table.render().count("AL-2") == 1
+
+
+def test_grouping_does_not_reorder_the_rows() -> None:
+    table = grouped()
+    table.add(line="AL-2", code="TP-1", off=-905.0)
+    table.add(line="BR-9", code="TP-3", off=-910.0)
+    table.add(line="AL-2", code="TP-2", off=-880.0)
+    rendered = table.render()
+    assert rendered.index("TP-3") < rendered.index("TP-2")
+    assert rendered.count("AL-2") == 2
+    assert rendered.count("BR-9") == 1
+
+
+def test_a_group_can_carry_a_label() -> None:
+    table = Table(columns=(Column("line", "Line"), Column("code", "Post"))).group_by(
+        "line", label="line "
+    )
+    table.add(line="AL-2", code="TP-1")
+    assert "line AL-2" in table.render()
+
+
+def test_grouping_on_a_column_the_table_lacks_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        Table(columns=(Column("a", "A"),)).group_by("b")
+
+
+def test_a_table_with_no_grouping_renders_as_it_always_did() -> None:
+    table = simple().add(code="TP-1", off=-905.0)
+    assert len(table.render().splitlines()) == 3
+
+
+def test_grouping_leaves_the_column_widths_alone() -> None:
+    table = grouped()
+    table.add(line="AL-2", code="TP-1", off=-905.0)
+    table.add(line="BR-9", code="TP-1234567", off=-880.0)
+    widths = {len(line) for line in table.render().splitlines() if "TP-" in line}
+    assert len(widths) == 1
+
+
+def test_a_single_group_produces_no_blank_line_before_it() -> None:
+    table = grouped()
+    table.add(line="AL-2", code="TP-1", off=-905.0)
+    lines = table.render().splitlines()
+    assert lines[2] == "AL-2"
+    assert "" not in lines
