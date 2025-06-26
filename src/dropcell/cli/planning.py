@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import click
 
+from dropcell.analysis.coating import assess_coating, share_out, worst_first
 from dropcell.analysis.coverage import coverage
 from dropcell.analysis.history import compare_years, latest_pair, years_present
 from dropcell.analysis.line import assess_line
@@ -31,6 +32,7 @@ from dropcell.schedule.register import build_register
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
 from dropcell.store.readings import ReadingRepository
+from dropcell.store.rectifiers import RectifierCheckRepository, RectifierRepository
 from dropcell.store.segments import SegmentRepository
 from dropcell.store.testpoints import TestPointRepository
 
@@ -324,3 +326,90 @@ def estate_report(context: Context) -> None:
             )
         )
     click.echo(render_estate(summaries, as_of=context.today))
+
+
+COATING_COLUMNS = (
+    Column("code", "Segment"),
+    Column("coating", "Coating", width=16),
+    Column("area", "Area m2", align="right", format=".0f"),
+    Column("design", "As laid mA", align="right", format=".1f"),
+    Column("drawn", "Drawing mA", align="right", format=".0f"),
+    Column("factor", "Factor", align="right", format=".0f"),
+    Column("bare", "Implied bare m2", align="right", format=".2f"),
+    Column("verdict", "Coating", width=20),
+)
+
+
+@plan_group.command("coating")
+@click.option("--line", "line_code", required=True)
+@click.option(
+    "--current",
+    "measured",
+    default=None,
+    help="Total current on the line, such as 12.4 A. Defaults to the rectifier checks.",
+)
+@click.option("--explain", is_flag=True, help="Write each comparison out underneath.")
+@pass_context
+@handled
+def coating_report(
+    context: Context, line_code: str, measured: str | None, explain: bool
+) -> None:
+    """What the current draw says about the coating.
+
+    The output is split across the segments by their design current, which is a
+    guess and is stated as one on the page. A line with one segment gets an
+    exact answer; a line with six gets six answers that add up to the right
+    total and are individually approximate.
+    """
+    from dropcell.units import parse_current_a
+
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    segments = SegmentRepository(database).for_line(line.code)
+    if not segments:
+        click.echo("no segments on this line, so there is nothing to compare against")
+        return
+    if measured is not None:
+        total_ma = parse_current_a(measured) * 1000.0
+        source = "the current given on the command line"
+    else:
+        checks = RectifierCheckRepository(database)
+        latest = [
+            checks.latest(unit.tag)
+            for unit in RectifierRepository(database).for_line(line.code)
+        ]
+        readings = [item for item in latest if item is not None]
+        if not readings:
+            click.echo("no rectifier has been read on this line and no current was given")
+            return
+        total_ma = sum(item.output_current_a for item in readings) * 1000.0
+        source = f"the last check on {len(readings)} rectifiers"
+    split = share_out(segments, total_ma)
+    conditions = [assess_coating(segment, split[segment.code]) for segment in segments]
+    table = Table(
+        columns=COATING_COLUMNS,
+        title=f"Coating condition, {line.code}",
+        empty_note="nothing to compare",
+    )
+    for condition in worst_first(conditions):
+        table.add(
+            code=condition.segment_code,
+            coating=str(condition.coating),
+            area=condition.area_m2,
+            design=condition.design_current_ma,
+            drawn=condition.measured_current_ma,
+            factor=condition.breakdown_factor,
+            bare=condition.implied_bare_area_m2,
+            verdict=condition.verdict,
+        )
+    click.echo(table.render())
+    click.echo("")
+    click.echo(f"{total_ma / 1000.0:.2f} A on the line, from {source}")
+    if len(segments) > 1:
+        click.echo("split across the segments by design current, which is a guess")
+    worth = [item for item in conditions if item.is_worth_investigating]
+    click.echo(f"{len(worth)} of {len(conditions)} segments are worth a gradient survey")
+    if explain:
+        click.echo("")
+        for condition in worst_first(conditions):
+            click.echo(f"  {condition.explain()}")
