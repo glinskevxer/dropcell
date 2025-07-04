@@ -11,6 +11,8 @@ in whichever unit the drawing was made in.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 from dropcell.cli.context import Context, handled, pass_context
@@ -27,6 +29,7 @@ from dropcell.report.table import Column, Table
 from dropcell.stationing import Convention, Station, StationRange
 from dropcell.store.lines import LineRepository
 from dropcell.store.segments import SegmentRepository
+from dropcell.store.transfer import export_line, import_line
 from dropcell.units import parse_length_m
 
 LINE_COLUMNS = (
@@ -316,3 +319,66 @@ def return_line(context: Context, code: str) -> None:
     line = lines.get(code)
     back = lines.save(dataclasses.replace(line, status=LineStatus.IN_SERVICE, retired_on=None))
     click.echo(f"{back.code} is back in service")
+
+
+@line_group.command("export")
+@click.argument("code")
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, writable=True),
+    default=None,
+    help="Write here instead of to standard output.",
+)
+@pass_context
+@handled
+def export_line_command(context: Context, code: str, out_path: str | None) -> None:
+    """Write one line and everything on it out as a transfer document.
+
+    Potentials go out against copper sulfate, whatever cell they were read
+    with, because the receiving register has no way to know which cells the
+    sending one had. That is a conversion rather than a loss, and it is the same
+    conversion every report in here already does.
+    """
+    import json
+
+    payload = export_line(context.database(), code)
+    text = json.dumps(payload, indent=2, sort_keys=True)
+    if out_path is None:
+        click.echo(text)
+        return
+    with open(out_path, "w", encoding="utf-8") as handle:
+        handle.write(text + "\n")
+    counts = ", ".join(
+        f"{len(payload[name])} {name.replace('_', ' ')}"
+        for name in ("segments", "test_points", "readings", "findings")
+    )
+    context.say(f"{payload['line']['code']} written to {out_path}: {counts}")
+
+
+@line_group.command("import")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@pass_context
+@handled
+def import_line_command(context: Context, path: Path) -> None:
+    """Read a transfer document into this register."""
+    import json
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        from dropcell.errors import ValidationError
+
+        raise ValidationError(
+            "that file is not readable JSON", path=str(path), reason=str(exc)
+        ) from exc
+    if not isinstance(payload, dict):
+        from dropcell.errors import ValidationError
+
+        raise ValidationError("a transfer document is one object", path=str(path))
+    line = import_line(context.database(), payload)
+    counts = ", ".join(
+        f"{len(payload.get(name, []))} {name.replace('_', ' ')}"
+        for name in ("segments", "test_points", "readings", "findings")
+    )
+    click.echo(f"{line.code} imported: {counts}")
