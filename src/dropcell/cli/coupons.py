@@ -16,6 +16,7 @@ import click
 
 from dropcell.analysis.coupon import CouponAssessment, assess_coupon, worst_first
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.cli.outcome import report_outcome
 from dropcell.ingest.coupon import import_coupon_readings
 from dropcell.model.coupon import Coupon, CouponOrientation, CouponReading
 from dropcell.report.table import Column, Table
@@ -139,13 +140,14 @@ def import_coupons(context: Context, path: Path) -> None:
         now=dt.datetime.combine(context.today, dt.time(12, 0)),
         source=path.name,
     )
-    click.echo(f"{loaded.written} readings written from {path.name}")
-    if loaded.quarantined:
-        click.echo(f"{loaded.quarantined} rows could not be read")
-    for reason in loaded.reasons():
-        click.echo(f"  {reason}")
-    for thin in loaded.thin:
-        click.echo(f"  {thin} carries nothing but a connected potential")
+    report_outcome(
+        loaded.run,
+        landed=loaded.written,
+        noun="readings",
+        quarantined=loaded.quarantined,
+        reasons=loaded.reasons(),
+        notes=[f"{item} carries nothing but a connected potential" for item in loaded.thin],
+    )
 
 
 @coupon_group.command("status")

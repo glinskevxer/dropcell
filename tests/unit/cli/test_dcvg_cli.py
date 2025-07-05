@@ -77,7 +77,7 @@ def test_a_gradient_file_becomes_a_dig_sheet(
     seed(run)
     result = run("survey", "dcvg", str(dcvg_file(GOOD)), "--line", "AL-2")
     assert result.exit_code == 0
-    assert "3 indications read" in result.output
+    assert "3 indications written" in result.output
     assert "Dig sheet, AL-2" in result.output
     assert "AL-2-D001" in result.output
 
@@ -145,7 +145,7 @@ def test_a_file_with_no_dates_can_take_one_on_the_command_line(
     result = run(
         "survey", "dcvg", str(dcvg_file(text)), "--line", "AL-2", "--date", "2025-03-14"
     )
-    assert "2 indications read" in result.output
+    assert "2 indications written" in result.output
 
 
 def test_the_same_file_twice_is_a_conflict(

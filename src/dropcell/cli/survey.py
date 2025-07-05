@@ -19,6 +19,7 @@ import click
 
 from dropcell.analysis.priority import score_defect
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.cli.outcome import report_outcome
 from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
 from dropcell.findings.raise_from import from_cis_sections
 from dropcell.ingest.cis import import_cis
@@ -244,11 +245,13 @@ def analyse_dcvg(
                 segment=segment,
             )
         )
-    click.echo(f"{loaded.found} indications read from {path.name}")
-    if loaded.quarantined:
-        click.echo(f"{loaded.quarantined} rows could not be read")
-    for reason in loaded.reasons():
-        click.echo(f"  {reason}")
+    report_outcome(
+        loaded.run,
+        landed=loaded.found,
+        noun="indications",
+        quarantined=loaded.quarantined,
+        reasons=loaded.reasons(),
+    )
     if off_segment:
         click.echo(f"{len(off_segment)} indications sit on pipe no segment describes")
     click.echo("")
@@ -291,11 +294,13 @@ def import_soil_command(context: Context, path: Path, line_code: str, depth: str
         source=path.name,
         convention=line.convention,
     )
-    click.echo(f"{loaded.stored} soundings stored from {path.name}")
-    if loaded.quarantined:
-        click.echo(f"{loaded.quarantined} rows could not be read")
-    for reason in loaded.reasons():
-        click.echo(f"  {reason}")
+    report_outcome(
+        loaded.run,
+        landed=loaded.stored,
+        noun="soundings",
+        quarantined=loaded.quarantined,
+        reasons=loaded.reasons(),
+    )
     click.echo("")
     at_depth = parse_length_m(depth)
     table = Table(

@@ -16,8 +16,8 @@ from pathlib import Path
 
 import click
 
-from dropcell import logs
 from dropcell.cli.context import Context, handled, pass_context
+from dropcell.cli.outcome import report_dry_run, report_outcome
 from dropcell.electrodes import Electrode
 from dropcell.ingest.annual import ImportOutcome, import_annual
 from dropcell.ingest.profiles import get_profile, profile_names
@@ -45,26 +45,20 @@ def import_group() -> None:
 
 
 def _report(outcome: ImportOutcome) -> None:
-    logs.imported(
-        outcome.source,
-        kind=outcome.run.kind,
-        accepted=outcome.run.accepted,
-        rejected=outcome.run.rejected,
-        written=outcome.written,
-        skipped=len(outcome.skipped),
+    report_outcome(
+        outcome.run,
+        landed=outcome.written,
+        noun="rows",
+        quarantined=outcome.quarantined,
+        reasons=outcome.reasons(),
     )
-    click.echo(f"{outcome.written} rows written from {outcome.source or 'the input'}")
-    if outcome.quarantined:
-        click.echo(f"{outcome.quarantined} rows could not be read")
-    for reason in outcome.reasons():
-        click.echo(f"  {reason}")
 
 
 def _dry_run(text: str, profile_name: str, convention: Convention, source: str) -> None:
     result = read_text(text, get_profile(profile_name), convention=convention, source=source)
-    click.echo(f"{result.accepted} rows would read, {result.rejected} would be held")
-    for held in result.quarantine:
-        click.echo(f"  {held.summary}")
+    report_dry_run(
+        result.accepted, result.rejected, [held.summary for held in result.quarantine]
+    )
 
 
 @import_group.command("profiles")

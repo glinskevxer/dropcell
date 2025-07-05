@@ -52,7 +52,7 @@ def test_a_file_becomes_soundings(
     run(*ADD_LINE)
     result = run("survey", "soil", str(soil_file(GOOD)), "--line", "AL-2")
     assert result.exit_code == 0
-    assert "2 soundings stored" in result.output
+    assert "2 soundings written" in result.output
     assert "12+45.50" in result.output
     assert "40+00.00" in result.output
 
@@ -72,7 +72,7 @@ def test_a_group_with_one_spacing_is_reported_not_stored(
     run(*ADD_LINE)
     text = GOOD + "80+00.00,2025-03-14,1 m,40,\n"
     result = run("survey", "soil", str(soil_file(text)), "--line", "AL-2")
-    assert "2 soundings stored" in result.output
+    assert "2 soundings written" in result.output
     assert "at least two spacings" in result.output
 
 
@@ -88,7 +88,7 @@ def test_two_days_at_one_place_are_two_soundings(
         + "12+45.50,2024-03-14,2 m,9,\n"
     )
     result = run("survey", "soil", str(soil_file(text)), "--line", "AL-2")
-    assert "2 soundings stored" in result.output
+    assert "2 soundings written" in result.output
 
 
 def test_a_broken_row_is_quarantined_and_counted(
@@ -121,4 +121,4 @@ def test_spacings_in_feet_land_in_metres(
     run(*ADD_LINE)
     text = HEADER + "12+45.50,2025-03-14,5 ft,20,\n" + "12+45.50,2025-03-14,10 ft,8,\n"
     result = run("survey", "soil", str(soil_file(text)), "--line", "AL-2")
-    assert "1 soundings stored" in result.output
+    assert "1 soundings written" in result.output
