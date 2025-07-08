@@ -29,6 +29,8 @@ from dropcell.cli.reports import report_group
 from dropcell.cli.survey import survey_group
 from dropcell.cli.work import work_group
 from dropcell.config import load_or_default
+from dropcell.handbook import keys as handbook_keys
+from dropcell.handbook import render as render_handbook
 from dropcell.store.migrations import latest_version
 
 DEFAULT_REGISTER = "cp.sqlite"
@@ -94,6 +96,21 @@ def init_command(context: Context) -> None:
     """Create the register, or bring an existing one up to date."""
     context.database()
     click.echo(f"{context.register_path} is at schema version {latest_version()}")
+
+
+@main.command("handbook")
+@click.argument("section", required=False, default=None)
+@handled
+def handbook_command(section: str | None) -> None:
+    """Print the handbook, or one section of it.
+
+    The sections are start, year, reading, groups, units and exits.
+    """
+    if section == "list":
+        for key in handbook_keys():
+            click.echo(key)
+        return
+    click.echo(render_handbook(section), nl=False)
 
 
 @main.command("settings")

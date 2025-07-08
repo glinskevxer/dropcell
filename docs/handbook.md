@@ -1,5 +1,17 @@
 # dropcell handbook
 
+The handbook is in the package, so it travels with an installed
+command rather than with a checkout of this repository.
+
+```
+dropcell handbook          the whole thing
+dropcell handbook list     the section names
+dropcell handbook year     one section
+```
+
+What follows is the same text, for people reading this on a screen with the
+repository open.
+
 ## What this is for
 
 A cathodic protection programme produces a lot of numbers and very few
