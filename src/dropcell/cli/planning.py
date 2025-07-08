@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import click
 
+from dropcell.analysis.balance import balance
 from dropcell.analysis.coating import assess_coating, share_out, worst_first
 from dropcell.analysis.coverage import coverage
 from dropcell.analysis.history import compare_years, latest_pair, years_present
@@ -29,6 +30,7 @@ from dropcell.report.kpi import build_kpis
 from dropcell.report.table import Column, Table
 from dropcell.schedule.policy import STANDARD_POLICY
 from dropcell.schedule.register import build_register
+from dropcell.stationing import Station
 from dropcell.store.findings import FindingRepository
 from dropcell.store.lines import LineRepository
 from dropcell.store.readings import ReadingRepository
@@ -413,3 +415,62 @@ def coating_report(
         click.echo("")
         for condition in worst_first(conditions):
             click.echo(f"  {condition.explain()}")
+
+
+BALANCE_COLUMNS = (
+    Column("tag", "Unit"),
+    Column("station", "Station", align="right"),
+    Column("rated", "Rated A", align="right", format=".0f"),
+    Column("output", "Output A", align="right", format=".2f"),
+    Column("load", "Of rating", align="right", format=".0%"),
+    Column("share", "Of line", align="right", format=".0%"),
+    Column("spare", "Spare A", align="right", format=".1f"),
+    Column("state", "State", width=14),
+)
+
+
+@plan_group.command("balance")
+@click.option("--line", "line_code", required=True)
+@pass_context
+@handled
+def balance_report(context: Context, line_code: str) -> None:
+    """How the units on a line are sharing the work.
+
+    A line with four rectifiers and a comfortable protection rate can be a line
+    with one rectifier and three ornaments, and no other page here can tell
+    those apart.
+    """
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    units = RectifierRepository(database).for_line(line.code)
+    if not units:
+        click.echo("no rectifiers on this line")
+        return
+    checks = RectifierCheckRepository(database)
+    latest = {unit.tag: checks.latest(unit.tag) for unit in units}
+    result = balance(units, latest)
+    table = Table(columns=BALANCE_COLUMNS, title=f"Load sharing, {line.code}")
+    for share in sorted(result.units, key=lambda item: -item.output_a):
+        state = "dead" if share.is_dead else ("at capacity" if not share.has_headroom else "")
+        table.add(
+            tag=share.tag,
+            station=line.format_station(Station(share.station_m)),
+            rated=share.rated_a,
+            output=share.output_a,
+            load=share.load,
+            share=share.share,
+            spare=share.spare_a,
+            state=state,
+        )
+    click.echo(table.render())
+    click.echo("")
+    click.echo(result.summary())
+    if result.is_concentrated:
+        click.echo("  one unit is carrying most of this line")
+    gap = result.widest_gap_m()
+    if gap is not None:
+        click.echo(f"  the widest gap between neighbouring units is {gap:.0f} m")
+    if result.can_lose_the_biggest:
+        click.echo(f"  {result.spare_a:.1f} A spare, enough rating to lose the largest unit")
+    else:
+        click.echo("  not enough spare rating anywhere to take up the largest unit's output")
