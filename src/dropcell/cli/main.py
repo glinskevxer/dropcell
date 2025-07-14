@@ -60,6 +60,12 @@ DEFAULT_REGISTER = "cp.sqlite"
 )
 @click.option("--quiet", "-q", is_flag=True, help="Say nothing but the output.")
 @click.option(
+    "--traceback",
+    "show_traceback",
+    is_flag=True,
+    help="Let an error escape with its stack, for whoever is fixing this.",
+)
+@click.option(
     "--verbose",
     "-v",
     "verbosity",
@@ -74,6 +80,7 @@ def main(
     config_path: Path | None,
     today: str | None,
     quiet: bool,
+    show_traceback: bool,
     verbosity: int,
 ) -> None:
     """Cathodic protection monitoring for buried steel pipelines."""
@@ -84,6 +91,7 @@ def main(
         register_path=register_path or settings.register or DEFAULT_REGISTER,
         today=anchor,
         quiet=quiet,
+        traceback=show_traceback,
         settings=settings,
     )
     ctx.call_on_close(ctx.obj.close)

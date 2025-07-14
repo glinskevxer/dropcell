@@ -67,6 +67,7 @@ class Context:
     register_path: str
     today: dt.date
     quiet: bool = False
+    traceback: bool = False
     settings: Settings = field(default_factory=Settings)
     _database: Database | None = field(default=None, repr=False)
 
@@ -95,14 +96,38 @@ class Context:
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def wants_traceback() -> bool:
+    """Whether the caller asked to see the stack rather than the message.
+
+    Read off the click context rather than passed in, because most of these
+    commands take a context object and a few take none at all, and the flag has
+    to work on both. It is looked up defensively because the decorator is also
+    used in tests that invoke a command with no context around it.
+    """
+    context = click.get_current_context(silent=True)
+    while context is not None:
+        if isinstance(context.obj, Context) and context.obj.traceback:
+            return True
+        context = context.parent
+    return False
+
+
 def handled(function: F) -> F:
-    """Turn a deliberate failure into a message and an exit code."""
+    """Turn a deliberate failure into a message and an exit code.
+
+    With the traceback flag the exception is left to escape instead. That is
+    for whoever is fixing this rather than for whoever is using it, and it is
+    the difference between a bug report saying "it said validation" and one
+    with a line number in it.
+    """
 
     @wraps(function)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return function(*args, **kwargs)
         except DropcellError as error:
+            if wants_traceback():
+                raise
             click.echo(f"{error.code}: {error}", err=True)
             sys.exit(exit_code_for(error))
 
