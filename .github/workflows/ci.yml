@@ -13,6 +13,7 @@ concurrency:
 env:
   PYTHONDONTWRITEBYTECODE: "1"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  FORCE_COLOR: "0"
 
 jobs:
   lint:
@@ -27,7 +28,7 @@ jobs:
       - name: install
         run: python -m pip install -e ".[dev]"
       - name: ruff check
-        run: python -m ruff check .
+        run: python -m ruff check --output-format=github .
       - name: ruff format
         run: python -m ruff format --check .
 
@@ -45,6 +46,20 @@ jobs:
       - name: mypy
         run: python -m mypy
 
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: install
+        run: python -m pip install -e ".[dev]"
+      - name: every migration applies to an empty register
+        run: python -m dropcell.tools.check_migrations
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -57,16 +72,43 @@ jobs:
       - name: install
         run: python -m pip install -e ".[dev]"
       - name: pytest
-        run: python -m pytest -q --cov=dropcell --cov-report=term-missing
+        run: >
+          python -m pytest -q
+          --cov=dropcell --cov-report=term-missing --cov-report=xml
+      - name: keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
 
-  build:
+  smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: install build backend
-        run: python -m pip install "hatchling==1.27.0" build
       - name: build the wheel
-        run: python -m build --wheel
+        run: |
+          python -m pip install "hatchling==1.27.0" build
+          python -m build --wheel
+      - name: install the wheel on its own
+        run: python -m pip install dist/*.whl
+      - name: the installed command answers for itself
+        run: |
+          dropcell --version
+          dropcell handbook list
+      - name: the installed command can build a register
+        run: |
+          cd "$(mktemp -d)"
+          dropcell init
+          dropcell line add AL-2 --name "Ashfield lateral" --operator "Northmoor Gas" \
+            --length "18500 m" --diameter "323.9 mm" --installed 1974
+          dropcell segment add AL-2-001 --line AL-2 --from 0+00.00 --to 600+00.00 \
+            --coating coal_tar --diameter "323.9 mm" --wall "6.35 mm" --installed 1974
+          dropcell post add TP-1 --line AL-2 --at 10+00.00 --installed 1998-05-04
+          dropcell post read TP-1 --on -1120 --off -905
+          dropcell report protection --line AL-2
+          dropcell register check

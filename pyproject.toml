@@ -40,6 +40,21 @@ files = ["src", "tests"]
 strict = true
 warn_unreachable = true
 
+[tool.coverage.run]
+branch = true
+source = ["src/dropcell"]
+omit = ["*/tools/*"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
