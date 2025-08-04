@@ -18,6 +18,7 @@ is still recognised as the same file.
 
 from __future__ import annotations
 
+import codecs
 import csv
 import hashlib
 import io
@@ -65,6 +66,12 @@ class ReadResult:
     quarantine: tuple[QuarantinedRow, ...]
     content_hash: str
     source: str = field(default="", compare=False)
+    encoding: str = field(default="utf-8", compare=False)
+
+    @property
+    def needed_a_fallback(self) -> bool:
+        """Whether the file was not in the encoding the profile expected."""
+        return self.encoding not in {"utf-8", "utf-8-sig"}
 
     @property
     def accepted(self) -> int:
@@ -143,6 +150,42 @@ def read_text(
     )
 
 
+FALLBACK_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
+
+
+def decode(payload: bytes, encoding: str) -> tuple[str, str]:
+    """Decode a file, trying the encodings a survey file actually arrives in.
+
+    Contractors export from a spreadsheet on Windows, and what comes out is
+    cp1252 with a byte order mark on the front about half the time. Decoding
+    that as UTF-8 with replacement gives a file that reads, imports, and has a
+    question mark in the middle of every technician's name, which is the worst
+    of the three outcomes because nobody notices.
+
+    So the declared encoding is tried first, then the ones a spreadsheet
+    produces, and only then is anything replaced. The encoding that worked is
+    handed back, because a file that needed the fallback is worth mentioning.
+
+    A byte order mark is checked for before any of that, because those bytes are
+    valid UTF-8 in their own right. Decoding them as plain UTF-8 succeeds, so
+    nothing falls through to the encoding that would have stripped them, and the
+    mark ends up glued to the front of the first column name.
+    """
+    if payload.startswith(codecs.BOM_UTF8):
+        return payload.decode("utf-8-sig"), "utf-8-sig"
+    attempts = (encoding, *FALLBACK_ENCODINGS)
+    seen: list[str] = []
+    for candidate in attempts:
+        if candidate in seen:
+            continue
+        seen.append(candidate)
+        try:
+            return payload.decode(candidate), candidate
+        except UnicodeDecodeError:
+            continue
+    return payload.decode(encoding, errors="replace"), f"{encoding} with replacements"
+
+
 def read_file(
     path: Path | str,
     profile: MappingProfile,
@@ -155,7 +198,7 @@ def read_file(
         payload = target.read_bytes()
     except OSError as exc:
         raise IngestError("cannot read that file", path=str(target)) from exc
-    text = payload.decode(profile.encoding, errors="replace")
+    text, used = decode(payload, profile.encoding)
     result = read_text(text, profile, convention=convention, source=target.name)
     return ReadResult(
         profile_name=result.profile_name,
@@ -164,6 +207,7 @@ def read_file(
         quarantine=result.quarantine,
         content_hash=content_hash(payload),
         source=target.name,
+        encoding=used,
     )
 
 

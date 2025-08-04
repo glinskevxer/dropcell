@@ -167,6 +167,22 @@ MATCH_COLUMNS = (
 )
 
 
+@import_group.command("encoding")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@handled
+def check_encoding(path: Path) -> None:
+    """Say what a file is actually encoded in."""
+    from dropcell.ingest.reader import decode
+
+    payload = path.read_bytes()
+    _, used = decode(payload, "utf-8")
+    click.echo(f"{path.name} reads as {used}")
+    if used not in {"utf-8", "utf-8-sig"}:
+        click.echo("  it was exported from a spreadsheet rather than written as UTF-8")
+    if "replacements" in used:
+        click.echo("  nothing could read it cleanly, so some characters will be wrong")
+
+
 @import_group.command("check")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--profile", "profile_name", default=None, help="Check against one profile.")
