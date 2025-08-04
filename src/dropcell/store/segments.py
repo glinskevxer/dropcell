@@ -8,9 +8,10 @@ segments overlap, which segments does this survey run across.
 
 from __future__ import annotations
 
+import dataclasses
 import sqlite3
 
-from dropcell.errors import ConflictError
+from dropcell.errors import ConflictError, ValidationError
 from dropcell.model.enums import ClassLocation, CoatingType, ProtectionMethod
 from dropcell.model.ids import normalise_code
 from dropcell.model.segment import Segment
@@ -24,6 +25,8 @@ SEGMENT_COLUMNS = (
 )
 
 _PLACEHOLDERS = ", ".join("?" * 13)
+
+BOUNDARY_GAP_M = 0.01
 
 
 def row_to_segment(row: sqlite3.Row) -> Segment:
@@ -128,3 +131,55 @@ class SegmentRepository(Repository[Segment]):
             ),
         )
         return [row_to_segment(row) for row in rows]
+
+    def split(
+        self, code: str, at: Station, *, left_code: str = "", right_code: str = ""
+    ) -> tuple[Segment, Segment]:
+        """Cut one segment in two at a station.
+
+        Resegmentation is not a rare event. A road widening puts a new casing
+        in the middle of a segment, a housing estate moves the class location
+        of half of it, a rehabilitation project recoats a mile. All of those
+        turn one segment into two, and doing it by hand means deleting the
+        original, which takes the history of everything that referred to it.
+
+        The two halves inherit everything from the original except their codes
+        and their extents, which is right: a split is a statement about where
+        the boundary is, not about what changed. Whatever did change is set on
+        one half afterwards.
+
+        The boundary station belongs to the second half. Segments in this
+        register are not allowed to share even one station, because a station
+        two segments both cover has two coatings and two criteria, so the first
+        half stops a centimetre short. That centimetre is smaller than any
+        measurement on a pipeline and it keeps the rule exact.
+        """
+        original = self.get(code)
+        if not original.extent.contains(at):
+            raise ValidationError(
+                "that station is not on this segment",
+                code=original.code,
+                station_m=at.metres,
+            )
+        if at.metres in (original.extent.start.metres, original.extent.end.metres):
+            raise ValidationError(
+                "splitting at an end produces a segment with no length",
+                code=original.code,
+            )
+        left = dataclasses.replace(
+            original,
+            code=left_code or f"{original.code}-A",
+            extent=StationRange(original.extent.start, Station(at.metres - BOUNDARY_GAP_M)),
+        )
+        right = dataclasses.replace(
+            original,
+            code=right_code or f"{original.code}-B",
+            extent=StationRange(at, original.extent.end),
+        )
+        if left.code == right.code:
+            raise ValidationError("the two halves need different codes", code=original.code)
+        with self.database.transaction():
+            self.delete(original.code)
+            self.add(left)
+            self.add(right)
+        return left, right

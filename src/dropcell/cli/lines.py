@@ -382,3 +382,39 @@ def import_line_command(context: Context, path: Path) -> None:
         for name in ("segments", "test_points", "readings", "findings")
     )
     click.echo(f"{line.code} imported: {counts}")
+
+
+@segment_group.command("split")
+@click.argument("code")
+@click.option("--at", "station", required=True, help="Where to put the boundary.")
+@click.option("--left", "left_code", default=None, help="Code for the upstream half.")
+@click.option("--right", "right_code", default=None, help="Code for the other half.")
+@pass_context
+@handled
+def split_segment(
+    context: Context,
+    code: str,
+    station: str,
+    left_code: str | None,
+    right_code: str | None,
+) -> None:
+    """Cut a segment in two, so a change can be recorded on one half.
+
+    Both halves inherit everything from the original. Whatever actually changed
+    is set on one of them afterwards, which keeps the split and the change as
+    two separate statements about the line.
+    """
+    database = context.database()
+    segments = SegmentRepository(database)
+    original = segments.get(code)
+    line = LineRepository(database).get(original.line_code)
+    at = line.require_on_line(Station.parse(station, line.convention))
+    left, right = segments.split(
+        original.code, at, left_code=left_code or "", right_code=right_code or ""
+    )
+    click.echo(
+        f"{original.code} split at {line.format_station(at)} into {left.code} and {right.code}"
+    )
+    click.echo(f"  {left.code}  {left.length_m:.0f} m")
+    click.echo(f"  {right.code}  {right.length_m:.0f} m")
+    click.echo("  both halves carry what the original did, so set the change on one")
