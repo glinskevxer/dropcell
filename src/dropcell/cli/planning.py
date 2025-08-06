@@ -19,6 +19,7 @@ from dropcell.analysis.line import assess_line
 from dropcell.analysis.risk import by_exposure, score_segment, total_exposure
 from dropcell.analysis.risk import rank as rank_risk
 from dropcell.analysis.schedule import line_histories
+from dropcell.analysis.survey_plan import budget_for, plan_surveys
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.errors import NotFoundError
@@ -474,3 +475,74 @@ def balance_report(context: Context, line_code: str) -> None:
         click.echo(f"  {result.spare_a:.1f} A spare, enough rating to lose the largest unit")
     else:
         click.echo("  not enough spare rating anywhere to take up the largest unit's output")
+
+
+PLAN_COLUMNS = (
+    Column("code", "Segment"),
+    Column("line", "Line"),
+    Column("length", "Walk km", align="right", format=".2f"),
+    Column("score", "Score", align="right", format=".2f"),
+    Column("state", "In the plan"),
+)
+
+
+@plan_group.command("survey")
+@click.option("--budget", type=float, required=True, help="Kilometres to be walked.")
+@click.option("--line", "line_code", default=None, help="Only this line.")
+@pass_context
+@handled
+def survey_plan(context: Context, budget: float, line_code: str | None) -> None:
+    """Fill a survey budget with the worst pipe that fits in it."""
+    database = context.database()
+    lines = (
+        [LineRepository(database).get(line_code)]
+        if line_code
+        else LineRepository(database).in_service()
+    )
+    scores = []
+    owners: dict[str, str] = {}
+    for line in lines:
+        posts = TestPointRepository(database).for_line(line.code)
+        for segment in SegmentRepository(database).for_line(line.code):
+            owners[segment.code] = line.code
+            scores.append(
+                score_segment(
+                    segment,
+                    as_of=context.today,
+                    covered_share=_covered_share(segment, posts, context.settings.post_reach_m),
+                )
+            )
+    if not scores:
+        click.echo("no segments anywhere to plan a survey over")
+        return
+    plan = plan_surveys(scores, owners, budget_km=budget)
+    table = Table(columns=PLAN_COLUMNS, title=f"Survey plan, {budget:.1f} km")
+    for item in plan.walking:
+        table.add(
+            code=item.segment_code,
+            line=item.line_code,
+            length=item.length_km,
+            score=item.score,
+            state="walk",
+        )
+    for item in plan.skipped:
+        table.add(
+            code=item.segment_code,
+            line=item.line_code,
+            length=item.length_km,
+            score=item.score,
+            state="not reached",
+        )
+    click.echo(table.render())
+    click.echo("")
+    click.echo(plan.summary())
+    if plan.spare_km > 0:
+        click.echo(f"  {plan.spare_km:.1f} km of budget unspent")
+    worst = plan.worst_skipped
+    if worst is not None:
+        needed = budget_for(scores, above_score=worst.score)
+        click.echo(
+            f"  the worst segment not reached is {worst.segment_code} at "
+            f"{worst.score:.2f}; walking everything at least that bad needs "
+            f"{needed:.1f} km"
+        )
