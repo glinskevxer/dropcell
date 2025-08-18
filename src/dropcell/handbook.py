@@ -101,6 +101,8 @@ note                                             what no column will hold
 report                                           questions somebody has today
 plan                                             questions asked once a quarter
 register                                         the file itself
+
+init, schema, settings, about, handbook          the tool itself
 """,
     ),
     Section(

@@ -106,6 +106,47 @@ def init_command(context: Context) -> None:
     click.echo(f"{context.register_path} is at schema version {latest_version()}")
 
 
+@main.command("about")
+@pass_context
+@handled
+def about_command(context: Context) -> None:
+    """Print what this build is and what register it is looking at.
+
+    The first thing anybody asks about a wrong answer is which version produced
+    it and which file it read, and both of those are surprisingly hard to
+    establish afterwards. A register on a shared drive is opened by four
+    different installs, and a settings file two directories up changes the
+    criterion without anybody typing anything.
+    """
+    import platform
+    import sys
+    from pathlib import Path
+
+    from dropcell.config import find
+    from dropcell.store.maintenance import stats
+
+    click.echo(f"dropcell     {__version__}")
+    click.echo(f"python       {platform.python_version()} at {sys.executable}")
+    click.echo(f"platform     {platform.system()} {platform.release()}")
+    click.echo(f"schema       version {latest_version()} in this build")
+    click.echo("")
+    settings_file = find()
+    click.echo(f"settings     {settings_file if settings_file else 'none, using the defaults'}")
+    click.echo(f"criterion    {context.settings.protection_mv:.0f} mV instant off")
+    click.echo(f"decay        {context.settings.decay_mv:.0f} mV")
+    click.echo(f"post reach   {context.settings.post_reach_m:.0f} m")
+    click.echo("")
+    target = Path(context.register_path)
+    click.echo(f"register     {target.resolve()}")
+    if not target.exists():
+        click.echo("             not there yet, run init")
+        return
+    figures = stats(context.database())
+    click.echo(f"             {figures.rows} rows in {figures.size_bytes / 1024:.0f} kB")
+    for name in ("line", "segment", "test_point", "reading", "finding"):
+        click.echo(f"{name:<12} {figures.tables.get(name, 0)}")
+
+
 @main.command("handbook")
 @click.argument("section", required=False, default=None)
 @handled

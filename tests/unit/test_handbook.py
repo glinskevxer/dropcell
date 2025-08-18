@@ -58,9 +58,7 @@ def test_the_groups_section_names_every_command_group() -> None:
 
     text = section("groups").body
     for name in main.commands:
-        if name in {"init", "schema", "settings", "handbook"}:
-            continue
-        assert name in text
+        assert name in text, name
 
 
 def test_the_handbook_does_not_explain_the_domain() -> None:
