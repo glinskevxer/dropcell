@@ -34,6 +34,7 @@ POST_COLUMNS = (
     Column("installed", "Installed"),
     Column("cell", "Fixed cell"),
     Column("last", "Last read"),
+    Column("state", "State"),
 )
 
 READING_COLUMNS = (
@@ -99,6 +100,7 @@ def add_post(
 
 @post_group.command("list")
 @click.option("--line", "line_code", required=True)
+@click.option("--in-service", is_flag=True, help="Leave the removed posts out.")
 @click.option(
     "--lead",
     "lead",
@@ -108,13 +110,15 @@ def add_post(
 )
 @pass_context
 @handled
-def list_posts(context: Context, line_code: str, lead: str | None) -> None:
+def list_posts(context: Context, line_code: str, lead: str | None, in_service: bool) -> None:
     """List the posts on one line."""
     database = context.database()
     line = LineRepository(database).get(line_code)
     posts = TestPointRepository(database)
     readings = ReadingRepository(database)
     found = posts.with_lead(line.code, LeadKind(lead)) if lead else posts.for_line(line.code)
+    if in_service:
+        found = [item for item in found if item.in_service]
     table = Table(columns=POST_COLUMNS, empty_note="no posts on this line")
     for post in found:
         last = readings.last_read_on(post.code, LeadKind.PIPE)
@@ -125,6 +129,7 @@ def list_posts(context: Context, line_code: str, lead: str | None) -> None:
             installed=post.installed_on.isoformat(),
             cell="yes" if post.permanent_reference_cell else "",
             last=last.isoformat() if last else "never",
+            state="" if post.in_service else f"removed {post.removed_on}",
         )
     click.echo(table.render())
 
@@ -216,3 +221,60 @@ def read_post(
     )
     ReadingRepository(database).add(reading)
     click.echo(f"{post.code} read at {reading.taken_on.isoformat()}")
+
+
+@post_group.command("move")
+@click.argument("code")
+@click.option("--to", "station", required=True, help="Where it is now.")
+@click.option("--note", default="", help="Why it moved.")
+@pass_context
+@handled
+def move_post(context: Context, code: str, station: str, note: str) -> None:
+    """Move a post to a new station, keeping its readings.
+
+    A post relocated when a road was widened is the same post with the same
+    history. Deleting it and adding it again would take every reading with it,
+    which is how a line loses twenty years of evidence to a road scheme.
+    """
+    import dataclasses
+
+    database = context.database()
+    posts = TestPointRepository(database)
+    post = posts.get(code)
+    line, at = line_at(database, post.line_code, station)
+    moved = posts.save(
+        dataclasses.replace(
+            post,
+            station=at,
+            description=note or post.description,
+        )
+    )
+    click.echo(
+        f"{moved.code} moved from {line.format_station(post.station)}"
+        f" to {line.format_station(at)}"
+    )
+    readings = ReadingRepository(database).for_point(moved.code)
+    click.echo(f"  {len(readings)} readings kept")
+
+
+@post_group.command("remove")
+@click.argument("code")
+@click.option("--on", "removed_on", default=None, help="Defaults to the working date.")
+@pass_context
+@handled
+def remove_post(context: Context, code: str, removed_on: str | None) -> None:
+    """Take a post out of service without deleting what it read."""
+    import dataclasses
+
+    database = context.database()
+    posts = TestPointRepository(database)
+    post = posts.get(code)
+    gone = posts.save(
+        dataclasses.replace(
+            post,
+            in_service=False,
+            removed_on=dt.date.fromisoformat(removed_on) if removed_on else context.today,
+        )
+    )
+    click.echo(f"{gone.code} out of service from {gone.removed_on}")
+    click.echo("  its readings stay, because they were true when they were taken")

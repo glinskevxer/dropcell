@@ -31,6 +31,8 @@ class TestPoint:
     installed_on: dt.date
     description: str = field(default="", compare=False)
     permanent_reference_cell: bool = False
+    in_service: bool = True
+    removed_on: dt.date | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", normalise_code(self.code, kind="test point code"))
@@ -39,6 +41,16 @@ class TestPoint:
         if not self.leads:
             raise ValidationError(
                 "a test point with no leads is a plastic tube", code=self.code
+            )
+        if self.in_service and self.removed_on is not None:
+            raise ValidationError("a post in service has not been removed", code=self.code)
+        if not self.in_service and self.removed_on is None:
+            raise ValidationError(
+                "a post out of service needs the date it went", code=self.code
+            )
+        if self.removed_on is not None and self.removed_on < self.installed_on:
+            raise ValidationError(
+                "a post cannot be removed before it was installed", code=self.code
             )
 
     @property

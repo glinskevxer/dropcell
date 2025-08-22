@@ -507,6 +507,15 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX line_by_status ON line (status)",
         ),
     ),
+    Migration(
+        version=14,
+        name="test post status",
+        statements=(
+            "ALTER TABLE test_point ADD COLUMN in_service INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE test_point ADD COLUMN removed_on TEXT",
+            "CREATE INDEX test_point_in_service ON test_point (line_code, in_service)",
+        ),
+    ),
 )
 
 

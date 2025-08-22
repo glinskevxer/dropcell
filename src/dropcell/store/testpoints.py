@@ -20,7 +20,8 @@ from dropcell.stationing import Station, StationRange
 from dropcell.store.base import Repository
 
 TEST_POINT_COLUMNS = (
-    "code, line_code, station_m, leads, installed_on, description, permanent_reference_cell"
+    "code, line_code, station_m, leads, installed_on, description, "
+    "permanent_reference_cell, in_service, removed_on"
 )
 
 
@@ -49,6 +50,25 @@ def row_to_test_point(row: sqlite3.Row) -> TestPoint:
         installed_on=dt.date.fromisoformat(str(row["installed_on"])),
         description=str(row["description"]),
         permanent_reference_cell=bool(row["permanent_reference_cell"]),
+        in_service=bool(row["in_service"]),
+        removed_on=(
+            None if row["removed_on"] is None else dt.date.fromisoformat(str(row["removed_on"]))
+        ),
+    )
+
+
+def _values(post: TestPoint) -> tuple[object, ...]:
+    """One post in the order the columns are declared."""
+    return (
+        post.code,
+        post.line_code,
+        post.station.metres,
+        encode_leads(post.leads),
+        post.installed_on.isoformat(),
+        post.description,
+        int(post.permanent_reference_cell),
+        int(post.in_service),
+        None if post.removed_on is None else post.removed_on.isoformat(),
     )
 
 
@@ -67,18 +87,34 @@ class TestPointRepository(Repository[TestPoint]):
     def add(self, post: TestPoint) -> TestPoint:
         """Insert a post."""
         self.database.execute(
-            f"INSERT INTO test_point ({TEST_POINT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                post.code,
-                post.line_code,
-                post.station.metres,
-                encode_leads(post.leads),
-                post.installed_on.isoformat(),
-                post.description,
-                int(post.permanent_reference_cell),
-            ),
+            f"INSERT INTO test_point ({TEST_POINT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            _values(post),
         )
         return post
+
+    def save(self, post: TestPoint) -> TestPoint:
+        """Insert a post or replace the one already stored under its code.
+
+        Posts move and posts are destroyed. A post relocated fifty metres when
+        a road was widened is the same post with the same history, and deleting
+        it to add it again takes every reading with it.
+        """
+        self.database.execute(
+            f"INSERT INTO test_point ({TEST_POINT_COLUMNS})"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT (code) DO UPDATE SET"
+            " line_code = excluded.line_code, station_m = excluded.station_m,"
+            " leads = excluded.leads, installed_on = excluded.installed_on,"
+            " description = excluded.description,"
+            " permanent_reference_cell = excluded.permanent_reference_cell,"
+            " in_service = excluded.in_service, removed_on = excluded.removed_on",
+            _values(post),
+        )
+        return post
+
+    def in_service(self, line_code: str) -> list[TestPoint]:
+        """Only the posts still standing on one line."""
+        return [post for post in self.for_line(line_code) if post.in_service]
 
     def for_line(self, line_code: str) -> list[TestPoint]:
         """Every post on one line, in stationing order."""
