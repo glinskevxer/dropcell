@@ -13,7 +13,6 @@ import click
 
 from dropcell.analysis.balance import balance
 from dropcell.analysis.coating import assess_coating, share_out, worst_first
-from dropcell.analysis.coverage import coverage
 from dropcell.analysis.history import compare_years, latest_pair, years_present
 from dropcell.analysis.line import assess_line
 from dropcell.analysis.risk import by_exposure, score_segment, total_exposure
@@ -21,6 +20,7 @@ from dropcell.analysis.risk import rank as rank_risk
 from dropcell.analysis.schedule import line_histories
 from dropcell.analysis.survey_plan import budget_for, plan_surveys
 from dropcell.analysis.trend import crossing_within, fit_trend, worst_drift_first
+from dropcell.analysis.view import gather
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.errors import NotFoundError
 from dropcell.model.enums import LeadKind
@@ -63,18 +63,16 @@ TREND_COLUMNS = (
 @handled
 def kpi_report(context: Context, line_code: str) -> None:
     """One line's programme on one page."""
-    database = context.database()
-    line = LineRepository(database).get(line_code)
-    assessment = assess_line(
-        database, line.code, as_of=context.today, settings=context.settings
+    view = gather(
+        context.database(),
+        line_code,
+        as_of=context.today,
+        settings=context.settings,
     )
-    segments = SegmentRepository(database).for_line(line.code)
-    posts = TestPointRepository(database).for_line(line.code)
-    register = build_register(
-        STANDARD_POLICY, line_histories(database, line.code), as_of=context.today
-    )
-    findings = FindingRepository(database).for_line(line.code)
-    kpis = build_kpis(assessment, register, coverage(line, segments, posts), findings)
+    if view.assessment is None:
+        click.echo(f"{view.line.code} has no test points on it, so there is nothing to read")
+        return
+    kpis = build_kpis(view.assessment, list(view.register), view.coverage, list(view.findings))
     click.echo(kpis.render())
 
 
