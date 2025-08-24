@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from dropcell.errors import IngestError
 from dropcell.ingest.mapping import MappingProfile
 from dropcell.ingest.profiles import PROFILES, get_profile
-from dropcell.ingest.reader import ReadResult, read_text
+from dropcell.ingest.reader import ReadResult, read_text, sniff_delimiter
 from dropcell.stationing import Convention
 
 
@@ -51,7 +51,8 @@ def headers_of(text: str, profile: MappingProfile) -> list[str]:
     lines = text.splitlines()[profile.skip_rows :]
     if not lines:
         return []
-    return [cell.strip() for cell in lines[0].split(profile.delimiter)]
+    delimiter = sniff_delimiter(lines[0], declared=profile.delimiter)
+    return [cell.strip() for cell in lines[0].split(delimiter)]
 
 
 def try_profile(

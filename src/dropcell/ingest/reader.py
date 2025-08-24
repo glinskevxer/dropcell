@@ -67,6 +67,14 @@ class ReadResult:
     content_hash: str
     source: str = field(default="", compare=False)
     encoding: str = field(default="utf-8", compare=False)
+    delimiter: str = field(default=",", compare=False)
+
+    @property
+    def separated_by(self) -> str:
+        """What the file turned out to be separated by, in words."""
+        return {",": "commas", ";": "semicolons", "\t": "tabs", "|": "pipes"}.get(
+            self.delimiter, repr(self.delimiter)
+        )
 
     @property
     def needed_a_fallback(self) -> bool:
@@ -106,6 +114,33 @@ class ReadResult:
             )
 
 
+DELIMITERS = (",", ";", "\t", "|")
+
+
+def sniff_delimiter(text: str, *, declared: str = ",") -> str:
+    """Work out what a file is actually separated by.
+
+    Half of Europe exports CSV separated by semicolons, because the spreadsheet
+    is set to a locale where the comma is the decimal point. Those files open
+    fine, read as one enormous column, and fail with every required column
+    missing, which is the least informative error this package can produce.
+
+    The header row is the only line worth looking at. Data rows contain commas
+    inside quoted remarks and semicolons in free text, and counting those
+    produces a confident wrong answer. A header row is short, it is written by
+    the exporting program rather than by a person, and the separator that
+    appears most often in it is the separator.
+    """
+    line = text.splitlines()[0] if text.splitlines() else ""
+    if not line:
+        return declared
+    counts = {candidate: line.count(candidate) for candidate in DELIMITERS}
+    if counts[declared] > 0:
+        return declared
+    best = max(counts, key=lambda candidate: counts[candidate])
+    return best if counts[best] > 0 else declared
+
+
 def content_hash(payload: bytes) -> str:
     """The fingerprint an import is recognised by."""
     return hashlib.sha256(payload).hexdigest()
@@ -117,10 +152,15 @@ def read_text(
     *,
     convention: Convention = Convention.FOOT,
     source: str = "",
+    sniff: bool = True,
 ) -> ReadResult:
     """Read a whole file that is already in memory."""
     payload = text.encode(profile.encoding, errors="replace")
-    reader = csv.reader(io.StringIO(text), delimiter=profile.delimiter)
+    delimiter = profile.delimiter
+    if sniff:
+        header_line = "\n".join(text.splitlines()[profile.skip_rows :][:1])
+        delimiter = sniff_delimiter(header_line, declared=profile.delimiter)
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     lines = list(reader)
     if profile.skip_rows:
         lines = lines[profile.skip_rows :]
@@ -147,6 +187,7 @@ def read_text(
         quarantine=tuple(quarantine),
         content_hash=content_hash(payload),
         source=source,
+        delimiter=delimiter,
     )
 
 
@@ -208,6 +249,7 @@ def read_file(
         content_hash=content_hash(payload),
         source=target.name,
         encoding=used,
+        delimiter=result.delimiter,
     )
 
 
