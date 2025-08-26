@@ -138,3 +138,50 @@ def test_an_overdue_post_is_counted(run: Callable[..., Result]) -> None:
     run("post", "read", "TP-1", "--on", "-1120", "--off", "-905", "--date", "2022-05-02")
     result = run("plan", "estate")
     assert "Overdue" in result.output
+
+
+def test_the_page_can_be_grouped_by_operator(run: Callable[..., Result]) -> None:
+    add_line(run, "AL-2", "Ashfield lateral", "18500 m")
+    run(
+        "line",
+        "add",
+        "VW-1",
+        "--name",
+        "Vale main",
+        "--operator",
+        "Vale Water",
+        "--length",
+        "1000 m",
+        "--diameter",
+        "323.9 mm",
+        "--installed",
+        "1991",
+    )
+    grouped = run("plan", "estate", "--by-operator").output
+    assert grouped.count("Northmoor Gas") == 1
+    assert grouped.index("Northmoor Gas") < grouped.index("Vale Water")
+
+
+def test_the_operators_are_counted_on_the_page(run: Callable[..., Result]) -> None:
+    add_line(run, "AL-2", "Ashfield lateral", "18500 m")
+    run(
+        "line",
+        "add",
+        "VW-1",
+        "--name",
+        "Vale main",
+        "--operator",
+        "Vale Water",
+        "--length",
+        "1000 m",
+        "--diameter",
+        "323.9 mm",
+        "--installed",
+        "1991",
+    )
+    assert "2 lines across 2 operators" in run("plan", "estate").output
+
+
+def test_one_operator_still_reads_correctly(run: Callable[..., Result]) -> None:
+    add_line(run, "AL-2", "Ashfield lateral", "18500 m")
+    assert "1 lines across 1 operators" in run("plan", "estate").output

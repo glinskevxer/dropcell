@@ -13,6 +13,7 @@ def summary(**overrides: object) -> LineSummary:
     kwargs: dict[str, object] = {
         "code": "AL-2",
         "name": "Ashfield lateral",
+        "operator": "Northmoor Gas",
         "length_m": 18_500.0,
         "posts": 10,
         "judged": 10,
@@ -75,6 +76,35 @@ def test_a_short_line_and_a_long_one_are_ranked_on_rate_not_count() -> None:
     long_line = summary(code="LO-1", length_m=20000.0, posts=40, judged=40, protected=36)
     rendered = render_estate([long_line, short_line], as_of=TODAY)
     assert rendered.index("SH-1") < rendered.index("LO-1")
+
+
+def test_the_page_can_be_grouped_by_operator() -> None:
+    rendered = render_estate(
+        [summary(), summary(code="VW-1", operator="Vale Water")],
+        as_of=TODAY,
+        by_operator=True,
+    )
+    assert rendered.count("Northmoor Gas") == 1
+    assert rendered.index("Northmoor Gas") < rendered.index("Vale Water")
+
+
+def test_the_ungrouped_page_repeats_the_operator_on_every_row() -> None:
+    rendered = render_estate([summary(), summary(code="BR-9")], as_of=TODAY)
+    assert rendered.count("Northmoor Gas") == 2
+
+
+def test_the_operators_are_counted() -> None:
+    rendered = render_estate(
+        [summary(), summary(code="VW-1", operator="Vale Water")], as_of=TODAY
+    )
+    assert "2 lines across 2 operators" in rendered
+
+
+def test_grouping_keeps_the_worst_line_first_inside_an_operator() -> None:
+    good = summary(code="AL-2")
+    bad = summary(code="BR-9", protected=3)
+    rendered = render_estate([good, bad], as_of=TODAY, by_operator=True)
+    assert rendered.index("BR-9") < rendered.index("AL-2")
 
 
 def test_the_page_counts_the_lines_nobody_has_built() -> None:

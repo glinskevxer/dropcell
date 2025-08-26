@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from dropcell.report.table import Column, Table
 
 ESTATE_COLUMNS = (
+    Column("operator", "Operator", width=20),
     Column("code", "Line"),
     Column("name", "Name", width=24),
     Column("length", "Length km", align="right", format=".1f"),
@@ -43,6 +44,7 @@ class LineSummary:
 
     code: str
     name: str
+    operator: str
     length_m: float
     posts: int
     judged: int
@@ -83,15 +85,34 @@ class LineSummary:
         return (1, rate, self.code)
 
 
-def render_estate(summaries: list[LineSummary], *, as_of: dt.date) -> str:
-    """The whole estate on one page."""
+def render_estate(
+    summaries: list[LineSummary],
+    *,
+    as_of: dt.date,
+    by_operator: bool = False,
+) -> str:
+    """The whole estate on one page.
+
+    Grouped by operator it reads as a set of relationships, which is what a
+    contractor holding registers for six clients wants. Ungrouped it reads as
+    one estate ranked worst first, which is what an operator with six lines
+    wants. Neither is the default for the other.
+    """
     table = Table(
         columns=ESTATE_COLUMNS,
         title="Estate",
         empty_note="no lines in the register",
     )
-    for summary in sorted(summaries, key=lambda item: item.sort_key):
+    ordered = (
+        sorted(summaries, key=lambda item: (item.operator, *item.sort_key))
+        if by_operator
+        else sorted(summaries, key=lambda item: item.sort_key)
+    )
+    if by_operator:
+        table.group_by("operator")
+    for summary in ordered:
         table.add(
+            operator=summary.operator,
             code=summary.code,
             name=summary.name,
             length=summary.length_m / 1000.0,
@@ -108,6 +129,7 @@ def render_estate(summaries: list[LineSummary], *, as_of: dt.date) -> str:
     judged = sum(item.judged for item in summaries)
     protected = sum(item.protected for item in summaries)
     unbuilt = sum(1 for item in summaries if item.posts == 0)
+    operators = len({item.operator for item in summaries})
     rate = 0.0 if judged == 0 else protected / judged
     return "\n".join(
         [
@@ -115,7 +137,7 @@ def render_estate(summaries: list[LineSummary], *, as_of: dt.date) -> str:
             "",
             table.render(),
             "",
-            f"{len(summaries)} lines, {total_length:.1f} km, "
+            f"{len(summaries)} lines across {operators} operators, {total_length:.1f} km, "
             f"{unbuilt} with no posts on them at all",
             f"{protected} of {judged} judged posts across the estate met a criterion"
             f" ({rate:.1%})",
