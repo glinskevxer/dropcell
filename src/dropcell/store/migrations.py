@@ -516,6 +516,17 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX test_point_in_service ON test_point (line_code, in_service)",
         ),
     ),
+    Migration(
+        version=15,
+        name="indexes the reports actually use",
+        statements=(
+            "CREATE INDEX reading_by_point_lead ON reading (test_point_code, lead, taken_on)",
+            "CREATE INDEX finding_by_kind ON finding (kind, state)",
+            "CREATE INDEX observation_by_kind ON observation (line_code, kind, seen_on)",
+            "CREATE INDEX coupon_reading_latest ON coupon_reading (coupon_code, taken_on DESC)",
+            "ANALYZE",
+        ),
+    ),
 )
 
 
