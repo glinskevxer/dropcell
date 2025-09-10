@@ -55,6 +55,7 @@ the segment.
         key="year",
         title="The order of a year",
         body="""
+dropcell import check FILE          what would happen, before anything happens
 dropcell import annual FILE         the test post survey
 dropcell rectifier check TAG ...    six times a year, or import rectifier
 dropcell plant test-casing ...      the interference round
