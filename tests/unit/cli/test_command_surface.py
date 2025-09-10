@@ -19,24 +19,6 @@ from click.testing import CliRunner
 from dropcell.cli.main import main
 from dropcell.handbook import section
 
-MEASUREMENT_OPTIONS = {
-    "--length",
-    "--diameter",
-    "--wall",
-    "--cover",
-    "--soil",
-    "--at",
-    "--from",
-    "--to",
-    "--on",
-    "--off",
-    "--reach",
-    "--step",
-    "--gap",
-    "--minimum",
-    "--threshold",
-}
-
 
 def walk(command: click.Command, path: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
     """Every leaf command, by the words somebody would type to reach it."""

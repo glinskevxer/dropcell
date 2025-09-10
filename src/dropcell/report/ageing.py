@@ -37,14 +37,13 @@ AGEING_COLUMNS = (
 
 
 def bucket_labels() -> list[str]:
-    """What each bucket is called on the page."""
-    return [
-        "0 to 30 d",
-        "30 to 90",
-        "90 to 180",
-        "180 to 365",
-        "over a year",
-    ]
+    """What each bucket is called on the page, read off the columns.
+
+    They were written out twice, here and in the column definitions, and the
+    two had already stopped agreeing. Reading them off the columns means the
+    page and the label list cannot drift again.
+    """
+    return [column.heading for column in AGEING_COLUMNS[1:6]]
 
 
 def bucket_of(age_days: int) -> int:

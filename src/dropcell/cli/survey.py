@@ -20,7 +20,6 @@ import click
 from dropcell.analysis.priority import score_defect
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.cli.outcome import report_outcome
-from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
 from dropcell.findings.raise_from import from_cis_sections
 from dropcell.ingest.cis import import_cis
 from dropcell.ingest.dcvg import import_dcvg
@@ -188,9 +187,6 @@ def _spike_table(spikes: list, convention: Convention, kept: bool) -> Table:  # 
             departure=spike.departure_mv,
         )
     return table
-
-
-DEFAULT_THRESHOLD_MV = DEFAULT_PROTECTION_MV
 
 
 @survey_group.command("dcvg")

@@ -18,7 +18,6 @@ somebody was ill look like a year where the pipe moved.
 
 from __future__ import annotations
 
-import datetime as dt
 from dataclasses import dataclass
 
 from dropcell.criteria.potential import DEFAULT_PROTECTION_MV
@@ -193,8 +192,3 @@ def first_year(readings: list[Reading]) -> int | None:
     """The earliest year anything was read."""
     years = sorted({reading.taken_on.year for reading in readings})
     return years[0] if years else None
-
-
-def anniversary(year: int) -> dt.date:
-    """The last day of a year, which is where a year on year figure is taken."""
-    return dt.date(year, 12, 31)

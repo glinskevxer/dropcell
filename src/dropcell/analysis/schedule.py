@@ -27,6 +27,9 @@ is read off the record rather than guessed at here.
 
 from __future__ import annotations
 
+import datetime as dt
+from collections.abc import Iterable
+
 from dropcell.model.enums import LeadKind
 from dropcell.schedule.policy import AssetKind
 from dropcell.schedule.register import AssetHistory
@@ -69,28 +72,42 @@ def post_histories(
 
 def rectifier_histories(database: Database, line_code: str) -> list[AssetHistory]:
     """One history per rectifier on a line, from its check sheets."""
-    units = RectifierRepository(database).for_line(line_code)
     checks = RectifierCheckRepository(database)
     return [
-        AssetHistory(
-            code=unit.tag,
-            kind=AssetKind.RECTIFIER,
-            visits=tuple(checks.visit_dates(unit.tag)),
-            in_service_from=unit.installed_on,
+        _history(
+            unit.tag,
+            AssetKind.RECTIFIER,
+            checks.visit_dates(unit.tag),
+            unit.installed_on,
         )
-        for unit in units
+        for unit in RectifierRepository(database).for_line(line_code)
     ]
+
+
+def _history(
+    code: str,
+    kind: AssetKind,
+    visits: Iterable[dt.date],
+    installed_on: dt.date,
+) -> AssetHistory:
+    """One asset's history, in the one shape the register wants it in."""
+    return AssetHistory(
+        code=code,
+        kind=kind,
+        visits=tuple(visits),
+        in_service_from=installed_on,
+    )
 
 
 def casing_histories(database: Database, line_code: str) -> list[AssetHistory]:
     """One history per cased crossing, from its tests."""
     history = TestHistory(database)
     return [
-        AssetHistory(
-            code=casing.code,
-            kind=AssetKind.CASING,
-            visits=tuple(test.tested_on for test in history.casing_tests(casing)),
-            in_service_from=casing.installed_on,
+        _history(
+            casing.code,
+            AssetKind.CASING,
+            (test.tested_on for test in history.casing_tests(casing)),
+            casing.installed_on,
         )
         for casing in CasingRepository(database).for_line(line_code)
     ]
@@ -100,11 +117,11 @@ def bond_histories(database: Database, line_code: str) -> list[AssetHistory]:
     """One history per bond, under whichever rule its record says applies."""
     history = TestHistory(database)
     return [
-        AssetHistory(
-            code=bond.code,
-            kind=AssetKind.CRITICAL_BOND if bond.critical else AssetKind.ORDINARY_BOND,
-            visits=tuple(check.checked_on for check in history.bond_checks(bond.code)),
-            in_service_from=bond.installed_on,
+        _history(
+            bond.code,
+            AssetKind.CRITICAL_BOND if bond.critical else AssetKind.ORDINARY_BOND,
+            (check.checked_on for check in history.bond_checks(bond.code)),
+            bond.installed_on,
         )
         for bond in BondRepository(database).for_line(line_code)
     ]
@@ -114,11 +131,11 @@ def joint_histories(database: Database, line_code: str) -> list[AssetHistory]:
     """One history per isolating joint, from its tests."""
     history = TestHistory(database)
     return [
-        AssetHistory(
-            code=joint.code,
-            kind=AssetKind.ISOLATION_JOINT,
-            visits=tuple(test.tested_on for test in history.isolation_tests(joint.code)),
-            in_service_from=joint.installed_on,
+        _history(
+            joint.code,
+            AssetKind.ISOLATION_JOINT,
+            (test.tested_on for test in history.isolation_tests(joint.code)),
+            joint.installed_on,
         )
         for joint in IsolationJointRepository(database).for_line(line_code)
     ]

@@ -35,7 +35,6 @@ from dropcell.stationing import Station
 
 METALLIC_SHORT_MV = 10.0
 ELECTROLYTIC_MV = 100.0
-NATIVE_STEEL_MV = -550.0
 
 
 class CasingStatus(StrEnum):
