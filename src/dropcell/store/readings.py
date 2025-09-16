@@ -147,13 +147,28 @@ class ReadingRepository:
         sql += " ORDER BY t.station_m, r.taken_on"
         return [row_to_reading(row) for row in self.database.query(sql, params)]
 
-    def latest_per_point(self, line_code: str, lead: LeadKind) -> dict[str, Reading]:
+    def latest_per_point(
+        self, line_code: str, lead: LeadKind, *, until: dt.date | None = None
+    ) -> dict[str, Reading]:
         """The most recent reading off one lead at every post on a line.
 
         One query rather than one per post. A line with four hundred posts was
         costing four hundred round trips to build a report that reads every one
         of them, and the join here does the same work in a single pass.
+
+        A cutoff date is not a filter for convenience. A report headed "as at"
+        a date that judges a post on a reading taken after it is not a report of
+        that date, and last year's annual document is exactly the case where
+        readings from after the year end exist.
         """
+        cutoff = "" if until is None else " AND r.taken_on <= :until"
+        inner = "" if until is None else " AND taken_on <= :until"
+        parameters: dict[str, object] = {
+            "line_code": normalise_code(line_code, kind="line code"),
+            "lead": str(lead),
+        }
+        if until is not None:
+            parameters["until"] = until.isoformat()
         rows = self.database.query(
             "SELECT r.test_point_code AS test_point_code, r.lead AS lead,"
             " r.taken_on AS taken_on, r.on_mv AS on_mv, r.off_mv AS off_mv,"
@@ -161,12 +176,12 @@ class ReadingRepository:
             " r.cell_serial AS cell_serial, r.technician AS technician,"
             " r.comment AS comment"
             " FROM reading r JOIN test_point t ON t.code = r.test_point_code"
-            " WHERE t.line_code = ? AND r.lead = ?"
-            " AND r.taken_on = ("
+            " WHERE t.line_code = :line_code AND r.lead = :lead"
+            + cutoff
+            + " AND r.taken_on = ("
             "   SELECT max(taken_on) FROM reading"
-            "   WHERE test_point_code = r.test_point_code AND lead = r.lead"
-            " )",
-            (normalise_code(line_code, kind="line code"), str(lead)),
+            "   WHERE test_point_code = r.test_point_code AND lead = r.lead" + inner + " )",
+            parameters,
         )
         return {str(row["test_point_code"]): row_to_reading(row) for row in rows}
 

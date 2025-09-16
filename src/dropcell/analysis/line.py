@@ -155,6 +155,11 @@ def assess_line(
     The settings decide the thresholds and nothing else. Passing none means the
     figures in the standards, which is what every report did before an operator
     could move them, so the default is the old behaviour rather than a new one.
+
+    Readings taken after the date being worked to are not used. A report headed
+    "as at" a date and judging a post on a reading from three months later is a
+    report of nothing in particular, and last year's annual document is the case
+    where those readings exist.
     """
     figures = settings or Settings()
     line = LineRepository(database).get(line_code)
@@ -163,7 +168,7 @@ def assess_line(
     readings = ReadingRepository(database)
     if not posts:
         raise NotFoundError("that line has no test points on it", code=line.code)
-    latest = readings.latest_per_point(line.code, lead)
+    latest = readings.latest_per_point(line.code, lead, until=as_of)
     assessed: list[PostAssessment] = []
     for post in posts:
         segment = _segment_for(segments, post)

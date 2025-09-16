@@ -117,7 +117,11 @@ def gather(
         posts=tuple(posts),
         assessment=assessment,
         register=tuple(
-            build_register(policy, line_histories(database, line.code), as_of=as_of)
+            build_register(
+                policy,
+                line_histories(database, line.code, until=as_of),
+                as_of=as_of,
+            )
         ),
         findings=tuple(FindingRepository(database).for_line(line.code)),
         coverage=coverage(line, segments, posts, reach_m=figures.post_reach_m),

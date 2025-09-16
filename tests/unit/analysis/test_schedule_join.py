@@ -173,3 +173,36 @@ def test_a_casing_never_tested_lands_on_the_register(register: Database) -> None
 
 def test_a_line_with_no_rectifiers_still_builds(register: Database) -> None:
     assert rectifier_histories(register, "AL-2") == []
+
+
+def test_a_visit_after_the_cutoff_is_left_out(register: Database) -> None:
+    readings = ReadingRepository(register)
+    readings.add(
+        Reading(test_point_code="TP-1", lead=LeadKind.PIPE, taken_on=TODAY, on_mv=-1120.0)
+    )
+    readings.add(
+        Reading(
+            test_point_code="TP-1",
+            lead=LeadKind.PIPE,
+            taken_on=dt.date(2025, 9, 1),
+            on_mv=-1120.0,
+        )
+    )
+    assert len(post_histories(register, "AL-2")[0].visits) == 2
+    trimmed = post_histories(register, "AL-2", until=TODAY)[0]
+    assert trimmed.visits == (TODAY,)
+
+
+def test_the_cutoff_reaches_every_kind_of_asset(register: Database) -> None:
+    TestHistory(register).add_casing_test(
+        CasingTest(
+            casing_code="CS-12",
+            line_code="AL-2",
+            station=Station(1245.5),
+            tested_on=dt.date(2025, 9, 1),
+            pipe_on_mv=-1120.0,
+            casing_on_mv=-560.0,
+        )
+    )
+    histories = {item.code: item for item in line_histories(register, "AL-2", until=TODAY)}
+    assert histories["CS-12"].visits == ()

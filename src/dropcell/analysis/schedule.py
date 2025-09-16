@@ -50,27 +50,26 @@ def post_histories(
     line_code: str,
     *,
     lead: LeadKind = LeadKind.PIPE,
+    until: dt.date | None = None,
 ) -> list[AssetHistory]:
     """One history per test post on a line, from its readings."""
-    posts = TestPointRepository(database).for_line(line_code)
     readings = ReadingRepository(database)
-    histories: list[AssetHistory] = []
-    for post in posts:
-        if not post.has(lead):
-            continue
-        visits = tuple(reading.taken_on for reading in readings.for_point(post.code, lead=lead))
-        histories.append(
-            AssetHistory(
-                code=post.code,
-                kind=AssetKind.TEST_POINT,
-                visits=visits,
-                in_service_from=post.installed_on,
-            )
+    return [
+        _history(
+            post.code,
+            AssetKind.TEST_POINT,
+            (reading.taken_on for reading in readings.for_point(post.code, lead=lead)),
+            post.installed_on,
+            until,
         )
-    return histories
+        for post in TestPointRepository(database).for_line(line_code)
+        if post.has(lead)
+    ]
 
 
-def rectifier_histories(database: Database, line_code: str) -> list[AssetHistory]:
+def rectifier_histories(
+    database: Database, line_code: str, *, until: dt.date | None = None
+) -> list[AssetHistory]:
     """One history per rectifier on a line, from its check sheets."""
     checks = RectifierCheckRepository(database)
     return [
@@ -79,6 +78,7 @@ def rectifier_histories(database: Database, line_code: str) -> list[AssetHistory
             AssetKind.RECTIFIER,
             checks.visit_dates(unit.tag),
             unit.installed_on,
+            until,
         )
         for unit in RectifierRepository(database).for_line(line_code)
     ]
@@ -89,17 +89,26 @@ def _history(
     kind: AssetKind,
     visits: Iterable[dt.date],
     installed_on: dt.date,
+    until: dt.date | None = None,
 ) -> AssetHistory:
-    """One asset's history, in the one shape the register wants it in."""
+    """One asset's history, in the one shape the register wants it in.
+
+    A visit after the date being worked to is left out rather than refused. The
+    compliance code refuses one, correctly, because a visit in the future is a
+    data entry mistake; a visit after the year an annual document covers is not
+    a mistake, it just belongs to the next document.
+    """
     return AssetHistory(
         code=code,
         kind=kind,
-        visits=tuple(visits),
+        visits=tuple(visit for visit in visits if until is None or visit <= until),
         in_service_from=installed_on,
     )
 
 
-def casing_histories(database: Database, line_code: str) -> list[AssetHistory]:
+def casing_histories(
+    database: Database, line_code: str, *, until: dt.date | None = None
+) -> list[AssetHistory]:
     """One history per cased crossing, from its tests."""
     history = TestHistory(database)
     return [
@@ -108,12 +117,15 @@ def casing_histories(database: Database, line_code: str) -> list[AssetHistory]:
             AssetKind.CASING,
             (test.tested_on for test in history.casing_tests(casing)),
             casing.installed_on,
+            until,
         )
         for casing in CasingRepository(database).for_line(line_code)
     ]
 
 
-def bond_histories(database: Database, line_code: str) -> list[AssetHistory]:
+def bond_histories(
+    database: Database, line_code: str, *, until: dt.date | None = None
+) -> list[AssetHistory]:
     """One history per bond, under whichever rule its record says applies."""
     history = TestHistory(database)
     return [
@@ -122,12 +134,15 @@ def bond_histories(database: Database, line_code: str) -> list[AssetHistory]:
             AssetKind.CRITICAL_BOND if bond.critical else AssetKind.ORDINARY_BOND,
             (check.checked_on for check in history.bond_checks(bond.code)),
             bond.installed_on,
+            until,
         )
         for bond in BondRepository(database).for_line(line_code)
     ]
 
 
-def joint_histories(database: Database, line_code: str) -> list[AssetHistory]:
+def joint_histories(
+    database: Database, line_code: str, *, until: dt.date | None = None
+) -> list[AssetHistory]:
     """One history per isolating joint, from its tests."""
     history = TestHistory(database)
     return [
@@ -136,6 +151,7 @@ def joint_histories(database: Database, line_code: str) -> list[AssetHistory]:
             AssetKind.ISOLATION_JOINT,
             (test.tested_on for test in history.isolation_tests(joint.code)),
             joint.installed_on,
+            until,
         )
         for joint in IsolationJointRepository(database).for_line(line_code)
     ]
@@ -146,12 +162,13 @@ def line_histories(
     line_code: str,
     *,
     lead: LeadKind = LeadKind.PIPE,
+    until: dt.date | None = None,
 ) -> list[AssetHistory]:
     """Everything on one line that a monitoring rule applies to."""
     return [
-        *post_histories(database, line_code, lead=lead),
-        *rectifier_histories(database, line_code),
-        *casing_histories(database, line_code),
-        *bond_histories(database, line_code),
-        *joint_histories(database, line_code),
+        *post_histories(database, line_code, lead=lead, until=until),
+        *rectifier_histories(database, line_code, until=until),
+        *casing_histories(database, line_code, until=until),
+        *bond_histories(database, line_code, until=until),
+        *joint_histories(database, line_code, until=until),
     ]

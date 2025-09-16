@@ -23,7 +23,7 @@ to work out which constraint fired.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
@@ -85,7 +85,9 @@ class Database:
         """The underlying connection, for the few places that need it raw."""
         return self._connection
 
-    def execute(self, sql: str, parameters: Sequence[Any] = ()) -> sqlite3.Cursor:
+    def execute(
+        self, sql: str, parameters: Sequence[Any] | Mapping[str, Any] = ()
+    ) -> sqlite3.Cursor:
         """Run one statement and hand back its cursor.
 
         The counter is not instrumentation for its own sake. Several of the
@@ -94,8 +96,9 @@ class Database:
         one nobody waits for. A count is the only way to hold that in a test.
         """
         self.statements += 1
+        bound: Any = parameters if isinstance(parameters, Mapping) else tuple(parameters)
         try:
-            return self._connection.execute(sql, tuple(parameters))
+            return self._connection.execute(sql, bound)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("the register refused that write", reason=str(exc)) from exc
         except sqlite3.Error as exc:
@@ -111,18 +114,22 @@ class Database:
         except sqlite3.Error as exc:
             raise StoreError("statement failed", reason=str(exc)) from exc
 
-    def query(self, sql: str, parameters: Sequence[Any] = ()) -> list[sqlite3.Row]:
+    def query(
+        self, sql: str, parameters: Sequence[Any] | Mapping[str, Any] = ()
+    ) -> list[sqlite3.Row]:
         """Run a select and read every row."""
         return self.execute(sql, parameters).fetchall()
 
-    def query_one(self, sql: str, parameters: Sequence[Any] = ()) -> sqlite3.Row | None:
+    def query_one(
+        self, sql: str, parameters: Sequence[Any] | Mapping[str, Any] = ()
+    ) -> sqlite3.Row | None:
         """Run a select that is expected to match at most one row."""
         rows = self.execute(sql, parameters).fetchmany(2)
         if len(rows) > 1:
             raise StoreError("expected at most one row", sql=sql)
         return rows[0] if rows else None
 
-    def scalar(self, sql: str, parameters: Sequence[Any] = ()) -> Any:
+    def scalar(self, sql: str, parameters: Sequence[Any] | Mapping[str, Any] = ()) -> Any:
         """Read a single value out of a single row."""
         row = self.query_one(sql, parameters)
         return None if row is None else row[0]

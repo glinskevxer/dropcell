@@ -96,3 +96,32 @@ def test_a_shielding_coating_is_still_a_shielding_coating(
     result = assess_line(database, "AL-2", as_of=TODAY, settings=Settings(protection_mv=-950.0))
     assert result.posts[0].segment is not None
     assert result.posts[0].segment.needs_above_ground_survey
+
+
+def test_a_reading_after_the_date_being_worked_to_is_not_used(
+    database: Database, line: Line, segment: Segment
+) -> None:
+    build(database, line, segment, -905.0)
+    ReadingRepository(database).add(
+        Reading(
+            test_point_code="TP-1",
+            lead=LeadKind.PIPE,
+            taken_on=dt.date(2025, 6, 1),
+            on_mv=-1120.0,
+            off_mv=-700.0,
+        )
+    )
+    later = assess_line(database, "AL-2", as_of=dt.date(2025, 12, 31))
+    assert not later.posts[0].protected
+    as_at_march = assess_line(database, "AL-2", as_of=TODAY)
+    assert as_at_march.posts[0].protected
+    assert as_at_march.posts[0].reading is not None
+    assert as_at_march.posts[0].reading.taken_on == TODAY
+
+
+def test_a_post_with_only_later_readings_reads_as_unread(
+    database: Database, line: Line, segment: Segment
+) -> None:
+    build(database, line, segment, -905.0)
+    earlier = assess_line(database, "AL-2", as_of=dt.date(2024, 1, 1))
+    assert len(earlier.unread) == 1

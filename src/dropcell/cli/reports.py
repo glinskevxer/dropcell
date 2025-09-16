@@ -136,7 +136,9 @@ def compliance_report(context: Context, line_code: str, window: int, as_json: bo
     database = context.database()
     line = LineRepository(database).get(line_code)
     register = build_register(
-        STANDARD_POLICY, line_histories(database, line.code), as_of=context.today
+        STANDARD_POLICY,
+        line_histories(database, line.code, until=context.today),
+        as_of=context.today,
     )
     if as_json:
         click.echo(dump(compliance_payload(register, as_of=context.today)))
@@ -260,7 +262,9 @@ def annual_report(context: Context, line_code: str, year: int | None, prepared_b
     year_end = dt.date(reported, 12, 31)
     as_of = min(year_end, context.today)
     assessment = assess_line(database, line.code, as_of=as_of, settings=context.settings)
-    register = build_register(STANDARD_POLICY, line_histories(database, line.code), as_of=as_of)
+    register = build_register(
+        STANDARD_POLICY, line_histories(database, line.code, until=as_of), as_of=as_of
+    )
     report = AnnualReport(
         year=reported,
         assessment=assessment,
