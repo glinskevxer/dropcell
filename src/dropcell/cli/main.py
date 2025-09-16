@@ -107,9 +107,10 @@ def init_command(context: Context) -> None:
 
 
 @main.command("about")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of prose.")
 @pass_context
 @handled
-def about_command(context: Context) -> None:
+def about_command(context: Context, as_json: bool) -> None:
     """Print what this build is and what register it is looking at.
 
     The first thing anybody asks about a wrong answer is which version produced
@@ -125,6 +126,25 @@ def about_command(context: Context) -> None:
     from dropcell.config import find
     from dropcell.store.maintenance import stats
 
+    if as_json:
+        from dropcell.report.serialise import dump
+
+        payload: dict[str, object] = {
+            "version": __version__,
+            "python": platform.python_version(),
+            "platform": f"{platform.system()} {platform.release()}",
+            "schema_version": latest_version(),
+            "settings_file": None if find() is None else str(find()),
+            "register": str(Path(context.register_path).resolve()),
+            "register_exists": Path(context.register_path).exists(),
+            "protection_mv": context.settings.protection_mv,
+            "decay_mv": context.settings.decay_mv,
+            "post_reach_m": context.settings.post_reach_m,
+        }
+        if Path(context.register_path).exists():
+            payload["rows"] = stats(context.database()).tables
+        click.echo(dump(payload))
+        return
     click.echo(f"dropcell     {__version__}")
     click.echo(f"python       {platform.python_version()} at {sys.executable}")
     click.echo(f"platform     {platform.system()} {platform.release()}")

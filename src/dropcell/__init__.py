@@ -51,7 +51,7 @@ from dropcell.stationing import Convention, Station, StationRange
 from dropcell.store.database import Database
 from dropcell.store.migrations import latest_version, migrate, open_register
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "STANDARD_POLICY",
