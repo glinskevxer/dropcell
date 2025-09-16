@@ -25,6 +25,7 @@ from dropcell.model.segment import Segment
 from dropcell.model.testpoint import TestPoint
 from dropcell.report.estate import LineSummary, render_estate
 from dropcell.report.kpi import build_kpis
+from dropcell.report.next import render_next
 from dropcell.report.table import Column, Table
 from dropcell.stationing import Station
 from dropcell.store.lines import LineRepository
@@ -519,3 +520,19 @@ def survey_plan(context: Context, budget: float, line_code: str | None) -> None:
             f"{worst.score:.2f}; walking everything at least that bad needs "
             f"{needed:.1f} km"
         )
+
+
+@plan_group.command("next")
+@click.option("--line", "line_code", required=True)
+@click.option("--limit", type=int, default=10, show_default=True, help="How many to list.")
+@pass_context
+@handled
+def next_report(context: Context, line_code: str, limit: int) -> None:
+    """What to do next on one line, ranked across everything the tool knows.
+
+    Nothing on this page is new. Every line of it is on another page already,
+    and the value is that they are ranked against each other rather than kept on
+    separate pages that cannot see one another.
+    """
+    view = gather(context.database(), line_code, as_of=context.today, settings=context.settings)
+    click.echo(render_next(view, as_of=context.today, limit=limit))

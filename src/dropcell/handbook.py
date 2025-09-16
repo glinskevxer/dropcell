@@ -84,6 +84,9 @@ report coverage is over line length. A hundred percent protection over one
 percent of the line is normal on a line with posts a mile apart, and it is what
 this report exists to show.
 
+plan next ranks everything the tool knows against everything else, which is the
+page to read first if you have half a day and no idea where to start.
+
 plan trend fits a straight line through each post's history. It will not fit
 fewer than three readings and it will not extrapolate past the horizon.
 
