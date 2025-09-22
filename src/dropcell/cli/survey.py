@@ -17,6 +17,8 @@ from pathlib import Path
 
 import click
 
+from dropcell.analysis.ground import assess_line as assess_ground_line
+from dropcell.analysis.ground import understated
 from dropcell.analysis.priority import score_defect
 from dropcell.cli.context import Context, handled, pass_context
 from dropcell.cli.outcome import report_outcome
@@ -383,3 +385,71 @@ def analyse_depol(
         f"{len(survey.meeting(minimum))} of {len(survey.read_back)} posts read twice"
         f" reached {minimum:.0f} mV"
     )
+
+
+GROUND_COLUMNS = (
+    Column("segment", "Segment"),
+    Column("cover", "Cover m", align="right", format=".1f"),
+    Column("filed", "Filed", align="right"),
+    Column("measured", "At cover", align="right", format=".0f"),
+    Column("band", "Band"),
+    Column("verdict", "Against file"),
+    Column("away", "Sounding m", align="right", format=".0f"),
+)
+
+
+@survey_group.command("ground")
+@click.option("--line", "line_code", required=True)
+@click.option(
+    "--only-understated",
+    is_flag=True,
+    help="Show only the segments filed kinder than the ground reads.",
+)
+@pass_context
+@handled
+def ground_command(context: Context, line_code: str, only_understated: bool) -> None:
+    """Compare each segment's filed resistivity against its nearest sounding.
+
+    Every segment is read at its own depth of cover rather than at one depth for
+    the whole line, so a road crossing and the farmland either side of it are
+    each read in the layer they are actually lying in.
+    """
+    database = context.database()
+    line = LineRepository(database).get(line_code)
+    segments = SegmentRepository(database).for_line(line.code)
+    soundings = SoundingRepository(database).for_line(line.code)
+    if not soundings:
+        click.echo(f"no soundings on {line.code}, so there is nothing to compare against")
+        return
+
+    results = assess_ground_line(segments, soundings)
+    shown = understated(results) if only_understated else results
+    table = Table(
+        columns=GROUND_COLUMNS,
+        title=f"Ground at depth of cover, {line.code}",
+        empty_note="nothing filed kinder than the ground reads"
+        if only_understated
+        else "no segments on this line",
+    )
+    for item in shown:
+        table.add(
+            segment=item.segment_code,
+            cover=item.depth_of_cover_m,
+            filed=f"{item.filed_ohm_m:.0f}" if item.filed_ohm_m is not None else "-",
+            measured=item.measured_ohm_m,
+            band=str(item.measured_band),
+            verdict=item.verdict,
+            away=item.distance_m,
+        )
+    click.echo(table.render())
+
+    wrong = understated(results)
+    if wrong and not only_understated:
+        click.echo("")
+        click.echo(f"{len(wrong)} filed kinder than the ground reads at depth of cover:")
+        for item in wrong:
+            click.echo(f"  {item.explain()}")
+    missing = [item for item in results if not item.has_filed_figure]
+    if missing:
+        click.echo("")
+        click.echo(f"{len(missing)} carry no filed resistivity at all")
